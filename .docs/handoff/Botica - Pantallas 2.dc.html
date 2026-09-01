@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #e9e9e7; font-family: "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: #0071e3; text-decoration: none; }
+  a:hover { color: #171717; }
+  svg { stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</helmet>
+
+<div style="padding:48px;display:flex;flex-direction:column;gap:48px;align-items:flex-start">
+
+<div id="pantalla-mostrador" style="width:1600px;height:1000px;display:flex;overflow:hidden;background:#fbfbfb;color:#171717;font-size:14px;box-shadow:0 1px 2px rgba(20,20,20,0.04),0 18px 44px rgba(20,20,20,0.08)">
+  <nav style="width:280px;flex-shrink:0;display:flex;flex-direction:column;background:#f4f4f4;border-right:1px solid rgba(0,0,0,0.06)">
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <span style="width:24px;height:24px;border-radius:4px;background:#171717;color:#fbfbfb;font-size:10px;font-weight:500;display:flex;align-items:center;justify-content:center">B</span>
+      <span style="flex:1;font-size:14px;font-weight:500;color:#171717">Droguerías La 45</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555555" stroke-width="1.5"><path d="M15 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9" /><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3z" /><path d="m11 9-3 3 3 3" /></svg>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;padding:12px 0;gap:2px">
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
+        <span>Panel</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5" /><path d="M12 12v9" /></svg>
+        <span>Inventario</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h2.5l2.6 12h11L21 7H6" /></svg>
+        <span>Compras</span>
+        <span style="margin-left:auto;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">12</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-6.4-6.4V3.4h10.8l6.4 6.4a2 2 0 0 1 0 2.8Z" /><circle cx="8.5" cy="8.5" r="1.3" /></svg>
+        <span>Precios</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;background:#ffffff;color:#171717;font-weight:500">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.2-4.4A8 8 0 0 1 13 4a8 8 0 0 1 8 8Z" /></svg>
+        <span>Mostrador</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15" /><path d="M14 9h4a2 2 0 0 1 2 2v10" /><path d="M2 21h20" /><path d="M8 8h2M8 12h2M8 16h2" /></svg>
+        <span>Sedes</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18" /><rect x="5" y="12" width="3.5" height="6" /><rect x="10.5" y="8" width="3.5" height="10" /><rect x="16" y="4" width="3.5" height="14" /></svg>
+        <span>Reportes</span>
+      </div>
+      <div style="flex:1"></div>
+      <span style="padding:0 20px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#909090">Botica 2.4.1</span>
+    </div>
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 16px;border-top:1px solid rgba(0,0,0,0.06)">
+      <div style="flex:1;padding-left:4px;min-width:0">
+        <p style="margin:0;font-size:12px;color:#171717">Andrés Peña</p>
+        <p style="margin:0;font-size:11px;color:#727272">Mostrador · Chapinero</p>
+      </div>
+      <span style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+      </span>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 40px;border-bottom:1px solid rgba(0,0,0,0.06);background:rgba(251,251,251,0.85)">
+      <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+        <p style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px;color:#727272">Mostrador<span style="color:#c8c8c8">/</span></p>
+        <h1 style="margin:0;font-size:28px;letter-spacing:-0.025em;font-weight:400;color:#171717">Venta 4821</h1>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:#727272;margin-right:6px">Turno abierto 09:14</span>
+        <button style="height:34px;padding:0 16px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:transparent;color:#171717;font-family:inherit;font-size:12px;font-weight:500">Buscar producto</button>
+      </div>
+    </header>
+
+    <main style="flex:1;min-height:0;display:flex;gap:20px;padding:28px 40px;overflow:hidden">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px">
+        <section style="flex-shrink:0;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02);overflow:hidden">
+          <div style="height:40px;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06);background:#f4f4f4">
+            <span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#727272">Qué dice el cliente</span>
+          </div>
+          <div style="padding:16px 20px 20px">
+            <div style="border-radius:9px;border:1px solid rgba(0,0,0,0.11);background:#fbfbfb;padding:12px 14px;font-size:14px;color:#171717">Lleva dos días con diarrea y algo de fiebre. Adulto, toma losartán.</div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+              <span style="height:24px;display:inline-block;padding:4px 10px;border-radius:999px;background:#e8e8e8;font-size:11px;line-height:16px;color:#555555">diarrea</span>
+              <span style="height:24px;display:inline-block;padding:4px 10px;border-radius:999px;background:#e8e8e8;font-size:11px;line-height:16px;color:#555555">fiebre</span>
+              <span style="height:24px;display:inline-block;padding:4px 10px;border-radius:999px;background:#e8e8e8;font-size:11px;line-height:16px;color:#555555">adulto</span>
+              <span style="height:24px;display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e7eb;font-size:11px;line-height:16px;color:#171717">tratamiento activo · losartán</span>
+            </div>
+          </div>
+        </section>
+
+        <section style="flex-shrink:0;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02);padding:20px;display:flex;gap:14px">
+          <span style="width:26px;height:26px;flex-shrink:0;border-radius:6px;background:#0071e3;display:flex;align-items:center;justify-content:center">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8"><path d="M12 3l1.8 5.4L19 10.2l-5.2 1.8L12 17.4l-1.8-5.4L5 10.2l5.2-1.8z" /></svg>
+          </span>
+          <div style="min-width:0">
+            <p style="margin:0;font-size:14px;line-height:20px;color:#171717">Prioriza rehidratación. Ofrece sales de rehidratación oral primero; el antidiarreico solo si no hay fiebre alta.</p>
+            <p style="margin:8px 0 0;font-size:12px;line-height:18px;color:#555555">En este punto el 64% de los clientes que compran antidiarreico lo llevan junto con suero. La sede tiene las tres referencias disponibles.</p>
+          </div>
+        </section>
+
+        <section style="flex:1;min-height:0;display:flex;flex-direction:column;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02);overflow:hidden">
+          <div style="height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06);background:#f4f4f4">
+            <span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#727272">Sugerencias sobre existencias de la sede</span>
+            <span style="font-size:11px;color:#727272">3 de 12 referencias</span>
+          </div>
+          <div style="flex:1;min-height:0;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+            <div style="border-radius:12px;border:1px solid rgba(0,0,0,0.06);padding:14px 16px;display:flex;align-items:center;gap:16px">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;line-height:20px;color:#171717">Sales de rehidratación oral · sobre 27,5 g</span>
+                  <span style="display:inline-block;padding:3px 8px;border-radius:999px;background:#e3e9e3;font-size:11px;line-height:16px;color:#171717">Primera opción</span>
+                </div>
+                <p style="margin:6px 0 0;font-size:12px;line-height:18px;color:#727272">14 unidades en Chapinero · repone la pérdida de líquidos, que es lo que más pesa en estos casos</p>
+              </div>
+              <span style="font-size:14px;color:#171717;font-variant-numeric:tabular-nums;white-space:nowrap">$3.900</span>
+              <button style="height:30px;padding:0 12px;border-radius:9px;border:none;background:#171717;color:#fbfbfb;font-family:inherit;font-size:12px;font-weight:500">Agregar</button>
+            </div>
+            <div style="border-radius:12px;border:1px solid rgba(0,0,0,0.06);padding:14px 16px;display:flex;align-items:center;gap:16px">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;line-height:20px;color:#171717">Loperamida 2 mg × 12</span>
+                  <span style="display:inline-block;padding:3px 8px;border-radius:999px;background:#ece7df;font-size:11px;line-height:16px;color:#171717">Con condición</span>
+                </div>
+                <p style="margin:6px 0 0;font-size:12px;line-height:18px;color:#727272">8 unidades en Chapinero · no ofrecer si la fiebre pasa de 38,5 °C o si hay sangre</p>
+              </div>
+              <span style="font-size:14px;color:#171717;font-variant-numeric:tabular-nums;white-space:nowrap">$8.400</span>
+              <button style="height:30px;padding:0 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:transparent;color:#171717;font-family:inherit;font-size:12px;font-weight:500">Agregar</button>
+            </div>
+            <div style="border-radius:12px;border:1px solid rgba(0,0,0,0.06);padding:14px 16px;display:flex;align-items:center;gap:16px">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:baseline;gap:10px">
+                  <span style="font-size:14px;line-height:20px;color:#171717">Electrolitos bebida 500 ml</span>
+                  <span style="display:inline-block;padding:3px 8px;border-radius:999px;background:#e3e7eb;font-size:11px;line-height:16px;color:#171717">Se lleva junto</span>
+                </div>
+                <p style="margin:6px 0 0;font-size:12px;line-height:18px;color:#727272">22 unidades en Chapinero · aparece en el 41% de los tickets con suero oral</p>
+              </div>
+              <span style="font-size:14px;color:#171717;font-variant-numeric:tabular-nums;white-space:nowrap">$5.200</span>
+              <button style="height:30px;padding:0 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:transparent;color:#171717;font-family:inherit;font-size:12px;font-weight:500">Agregar</button>
+            </div>
+            <div style="margin-top:auto;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06);display:flex;align-items:center;gap:10px">
+              <span style="width:8px;height:8px;border-radius:999px;background:#8c6a33;flex-shrink:0"></span>
+              <p style="margin:0;font-size:12px;line-height:18px;color:#555555">Con fiebre de más de dos días, remitir a consulta médica. Botica no diagnostica.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside style="width:380px;flex-shrink:0;display:flex;flex-direction:column;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02);overflow:hidden">
+        <div style="height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06);background:#f4f4f4">
+          <span style="font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#727272">Venta en curso</span>
+          <span style="font-size:11px;color:#727272;font-variant-numeric:tabular-nums">3 ítems</span>
+        </div>
+        <div style="flex:1;min-height:0;padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:baseline;gap:12px">
+            <span style="width:20px;flex-shrink:0;font-size:12px;color:#909090;font-variant-numeric:tabular-nums">1</span>
+            <div style="flex:1;min-width:0">
+              <p style="margin:0;font-size:14px;line-height:20px;color:#171717">Sales de rehidratación oral</p>
+              <p style="margin:2px 0 0;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">2 × $3.900</p>
+            </div>
+            <span style="font-size:14px;color:#171717;font-variant-numeric:tabular-nums">$7.800</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:12px">
+            <span style="width:20px;flex-shrink:0;font-size:12px;color:#909090;font-variant-numeric:tabular-nums">2</span>
+            <div style="flex:1;min-width:0">
+              <p style="margin:0;font-size:14px;line-height:20px;color:#171717">Acetaminofén 500 mg × 10</p>
+              <p style="margin:2px 0 0;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">1 × $2.600</p>
+            </div>
+            <span style="font-size:14px;color:#171717;font-variant-numeric:tabular-nums">$2.600</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:12px">
+            <span style="width:20px;flex-shrink:0;font-size:12px;color:#909090;font-variant-numeric:tabular-nums">3</span>
+            <div style="flex:1;min-width:0">
+              <p style="margin:0;font-size:14px;line-height:20px;color:#171717">Electrolitos bebida 500 ml</p>
+              <p style="margin:2px 0 0;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">1 × $5.200 · sugerido</p>
+            </div>
+            <span style="font-size:14px;color:#171717;font-variant-numeric:tabular-nums">$5.200</span>
+          </div>
+          <div style="margin-top:auto;padding-top:16px;border-top:1px solid rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#555555;font-variant-numeric:tabular-nums"><span>Subtotal</span><span style="color:#171717">$15.600</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#555555;font-variant-numeric:tabular-nums"><span>Descuento</span><span style="color:#171717">$0</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:#555555;font-variant-numeric:tabular-nums"><span>Total</span><span style="font-size:28px;letter-spacing:-0.025em;color:#171717">$15.600</span></div>
+          </div>
+        </div>
+        <div style="flex-shrink:0;padding:16px 20px;border-top:1px solid rgba(0,0,0,0.06);background:#f4f4f4;display:flex;flex-direction:column;gap:8px">
+          <button style="height:40px;border-radius:9px;border:none;background:#171717;color:#fbfbfb;font-family:inherit;font-size:14px;font-weight:500">Cobrar</button>
+          <p style="margin:0;text-align:center;font-size:11px;color:#727272">Ticket promedio del punto: $28.700</p>
+        </div>
+      </aside>
+    </main>
+  </div>
+</div>
+
+<div id="pantalla-compras" style="width:1600px;height:1000px;display:flex;overflow:hidden;background:#fbfbfb;color:#171717;font-size:14px;box-shadow:0 1px 2px rgba(20,20,20,0.04),0 18px 44px rgba(20,20,20,0.08)">
+  <nav style="width:280px;flex-shrink:0;display:flex;flex-direction:column;background:#f4f4f4;border-right:1px solid rgba(0,0,0,0.06)">
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <span style="width:24px;height:24px;border-radius:4px;background:#171717;color:#fbfbfb;font-size:10px;font-weight:500;display:flex;align-items:center;justify-content:center">B</span>
+      <span style="flex:1;font-size:14px;font-weight:500;color:#171717">Droguerías La 45</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555555" stroke-width="1.5"><path d="M15 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9" /><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3z" /><path d="m11 9-3 3 3 3" /></svg>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;padding:12px 0;gap:2px">
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
+        <span>Panel</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5" /><path d="M12 12v9" /></svg>
+        <span>Inventario</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;background:#ffffff;color:#171717;font-weight:500">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h2.5l2.6 12h11L21 7H6" /></svg>
+        <span>Compras</span>
+        <span style="margin-left:auto;font-size:11px;color:#171717;font-weight:500;font-variant-numeric:tabular-nums">12</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-6.4-6.4V3.4h10.8l6.4 6.4a2 2 0 0 1 0 2.8Z" /><circle cx="8.5" cy="8.5" r="1.3" /></svg>
+        <span>Precios</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.2-4.4A8 8 0 0 1 13 4a8 8 0 0 1 8 8Z" /></svg>
+        <span>Mostrador</span>
+        <span style="margin-left:auto;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">3</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15" /><path d="M14 9h4a2 2 0 0 1 2 2v10" /><path d="M2 21h20" /><path d="M8 8h2M8 12h2M8 16h2" /></svg>
+        <span>Sedes</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18" /><rect x="5" y="12" width="3.5" height="6" /><rect x="10.5" y="8" width="3.5" height="10" /><rect x="16" y="4" width="3.5" height="14" /></svg>
+        <span>Reportes</span>
+      </div>
+      <div style="flex:1"></div>
+      <span style="padding:0 20px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#909090">Botica 2.4.1</span>
+    </div>
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 16px;border-top:1px solid rgba(0,0,0,0.06)">
+      <div style="flex:1;padding-left:4px;min-width:0">
+        <p style="margin:0;font-size:12px;color:#171717">Marcela Ríos</p>
+        <p style="margin:0;font-size:11px;color:#727272">Administradora</p>
+      </div>
+      <span style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+      </span>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 40px;border-bottom:1px solid rgba(0,0,0,0.06);background:rgba(251,251,251,0.85)">
+      <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+        <p style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px;color:#727272">Compras<span style="color:#c8c8c8">/</span></p>
+        <h1 style="margin:0;font-size:28px;letter-spacing:-0.025em;font-weight:400;color:#171717">Orden sugerida 248</h1>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <button style="height:34px;padding:0 16px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:transparent;color:#171717;font-family:inherit;font-size:12px;font-weight:500">Descartar</button>
+        <button style="height:34px;padding:0 16px;border-radius:9px;border:none;background:#171717;color:#fbfbfb;font-family:inherit;font-size:12px;font-weight:500">Aprobar y enviar</button>
+      </div>
+    </header>
+
+    <div style="height:52px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 40px;border-bottom:1px solid rgba(0,0,0,0.06);background:#fbfbfb">
+      <span style="height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 6px 0 14px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);font-size:12px;font-weight:500;color:#171717">Proveedor<span style="height:20px;display:inline-flex;align-items:center;padding:0 8px;border-radius:999px;background:#f4f4f4;font-size:11px;font-weight:400;color:#555555">Coopidrogas</span></span>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 6px 0 14px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);font-size:12px;font-weight:500;color:#171717">Sede<span style="height:20px;display:inline-flex;align-items:center;padding:0 8px;border-radius:999px;background:#f4f4f4;font-size:11px;font-weight:400;color:#555555">Chapinero</span></span>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:9px;font-size:12px;font-weight:500;color:#555555">Categoría</span>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:9px;font-size:12px;font-weight:500;color:#555555">Confianza del modelo</span>
+      <span style="margin-left:auto;font-size:11px;color:#727272">Modelo entrenado con 18 meses de venta · actualizado hoy 06:00</span>
+    </div>
+
+    <main style="flex:1;min-height:0;display:flex;flex-direction:column;gap:16px;padding:28px 40px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;flex-shrink:0">
+        <section style="border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Referencias sugeridas</p>
+          <p style="margin:10px 0 0;font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">42</p>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b">de 1.184 activas en la sede</p>
+        </section>
+        <section style="border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Valor de la orden</p>
+          <p style="margin:10px 0 0;font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">$9,4 M</p>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b">cubre 34 días de venta proyectada</p>
+        </section>
+        <section style="border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Quiebres que evita</p>
+          <p style="margin:10px 0 0;font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">11</p>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b">referencias que se agotan en 7 días</p>
+        </section>
+        <section style="border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Recortes vs. pedido manual</p>
+          <p style="margin:10px 0 0;font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">−$2,1 M</p>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b">en referencias de rotación lenta</p>
+        </section>
+      </div>
+
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+        <div style="flex:1;min-height:0;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse;text-align:left;table-layout:fixed">
+            <thead>
+              <tr>
+                <th style="width:26%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Producto</th>
+                <th style="width:11%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Stock</th>
+                <th style="width:14%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Venta / sem</th>
+                <th style="width:13%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Cobertura</th>
+                <th style="width:13%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Sugerido</th>
+                <th style="width:23%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Por qué</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06);box-shadow:inset 2px 0 0 #171717;background:#e8e8e8">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Sales de rehidratación oral</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">14</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">38</td>
+                <td style="padding:0 22px;font-size:14px;color:#b04a3f;text-align:right;font-variant-numeric:tabular-nums">3 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">220</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Pico de temporada + quiebre reciente</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Acetaminofén 500 mg × 100</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">412</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">96</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">30 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">180</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Rotación estable, mantiene 45 días</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Ibuprofeno 400 mg × 50</td>
+                <td style="padding:0 22px;font-size:14px;color:#b04a3f;text-align:right;font-variant-numeric:tabular-nums">0</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">61</td>
+                <td style="padding:0 22px;font-size:14px;color:#b04a3f;text-align:right;font-variant-numeric:tabular-nums">0 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">300</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">En quiebre, hay 96 en Suba</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Loratadina 10 mg × 10</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">63</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">29</td>
+                <td style="padding:0 22px;font-size:14px;color:#8c6a33;text-align:right;font-variant-numeric:tabular-nums">15 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">140</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Sube con la temporada de polen</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Losartán 50 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">246</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">52</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">33 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">120</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Crónico, demanda predecible</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Metformina 850 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">289</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">44</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">46 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#fbfbfb;font-size:14px;color:#909090;font-variant-numeric:tabular-nums">0</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Cobertura suficiente, no pedir</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Salbutamol inhalador 100 mcg</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">7</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">12</td>
+                <td style="padding:0 22px;font-size:14px;color:#b04a3f;text-align:right;font-variant-numeric:tabular-nums">4 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">60</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Lote actual vence en 6 meses</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Omeprazol 20 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">468</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">35</td>
+                <td style="padding:0 22px;font-size:14px;color:#4c6a86;text-align:right;font-variant-numeric:tabular-nums">94 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#fbfbfb;font-size:14px;color:#909090;font-variant-numeric:tabular-nums">0</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Sobrestock, liberar capital</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Naproxeno 500 mg × 20</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">89</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">33</td>
+                <td style="padding:0 22px;font-size:14px;color:#8c6a33;text-align:right;font-variant-numeric:tabular-nums">18 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">100</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Sustituto del ibuprofeno en quiebre</td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Dipirona 500 mg × 10</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">263</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">58</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">32 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">150</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Rotación estable en las 6 sedes</td>
+              </tr>
+              <tr style="height:48px">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Electrolitos bebida 500 ml</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">22</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">27</td>
+                <td style="padding:0 22px;font-size:14px;color:#8c6a33;text-align:right;font-variant-numeric:tabular-nums">6 días</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;padding:5px 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:#ffffff;font-size:14px;color:#171717;font-variant-numeric:tabular-nums">160</span></td>
+                <td style="padding:0 22px;font-size:12px;color:#727272">Se vende junto con suero oral</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 22px;border-top:1px solid rgba(0,0,0,0.06);background:#f4f4f4">
+          <span style="font-size:11px;color:#727272;font-variant-numeric:tabular-nums">Mostrando 11 de 42 referencias sugeridas</span>
+          <span style="display:flex;align-items:baseline;gap:10px;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">Total de la orden<span style="font-size:20px;letter-spacing:-0.025em;color:#171717">$9.412.600</span></span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+</div>
+</x-dc>
+</body>
+</html>

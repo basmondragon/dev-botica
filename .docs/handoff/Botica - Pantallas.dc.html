@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #e9e9e7; font-family: "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: #0071e3; text-decoration: none; }
+  a:hover { color: #171717; }
+  svg { stroke-linecap: round; stroke-linejoin: round; }
+</style>
+</helmet>
+
+<div style="padding:48px;display:flex;flex-direction:column;gap:48px;align-items:flex-start">
+
+<div id="pantalla-inventario" style="width:1600px;height:1000px;display:flex;overflow:hidden;background:#fbfbfb;color:#171717;font-size:14px;box-shadow:0 1px 2px rgba(20,20,20,0.04),0 18px 44px rgba(20,20,20,0.08)">
+  <nav style="width:280px;flex-shrink:0;display:flex;flex-direction:column;background:#f4f4f4;border-right:1px solid rgba(0,0,0,0.06)">
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <span style="width:24px;height:24px;border-radius:4px;background:#171717;color:#fbfbfb;font-size:10px;font-weight:500;display:flex;align-items:center;justify-content:center">B</span>
+      <span style="flex:1;font-size:14px;font-weight:500;color:#171717">Droguerías La 45</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555555" stroke-width="1.5"><path d="M15 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9" /><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3z" /><path d="m11 9-3 3 3 3" /></svg>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;padding:12px 0;gap:2px">
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
+        <span>Panel</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;background:#ffffff;color:#171717;font-weight:500">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5" /><path d="M12 12v9" /></svg>
+        <span>Inventario</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h2.5l2.6 12h11L21 7H6" /></svg>
+        <span>Compras</span>
+        <span style="margin-left:auto;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">12</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-6.4-6.4V3.4h10.8l6.4 6.4a2 2 0 0 1 0 2.8Z" /><circle cx="8.5" cy="8.5" r="1.3" /></svg>
+        <span>Precios</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.2-4.4A8 8 0 0 1 13 4a8 8 0 0 1 8 8Z" /></svg>
+        <span>Mostrador</span>
+        <span style="margin-left:auto;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">3</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15" /><path d="M14 9h4a2 2 0 0 1 2 2v10" /><path d="M2 21h20" /><path d="M8 8h2M8 12h2M8 16h2" /></svg>
+        <span>Sedes</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18" /><rect x="5" y="12" width="3.5" height="6" /><rect x="10.5" y="8" width="3.5" height="10" /><rect x="16" y="4" width="3.5" height="14" /></svg>
+        <span>Reportes</span>
+      </div>
+      <div style="flex:1"></div>
+      <span style="padding:0 20px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#909090">Botica 2.4.1</span>
+    </div>
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 16px;border-top:1px solid rgba(0,0,0,0.06)">
+      <div style="flex:1;padding-left:4px;min-width:0">
+        <p style="margin:0;font-size:12px;color:#171717">Marcela Ríos</p>
+        <p style="margin:0;font-size:11px;color:#727272">Administradora</p>
+      </div>
+      <span style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+      </span>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 40px;border-bottom:1px solid rgba(0,0,0,0.06);background:rgba(251,251,251,0.85)">
+      <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+        <p style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px;color:#727272">Inventario<span style="color:#c8c8c8">/</span></p>
+        <h1 style="margin:0;font-size:28px;letter-spacing:-0.025em;font-weight:400;color:#171717">Existencias</h1>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <button style="height:34px;padding:0 16px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:transparent;color:#171717;font-family:inherit;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:8px">Cargar mercancía</button>
+        <button style="height:34px;padding:0 16px;border-radius:9px;border:none;background:#171717;color:#fbfbfb;font-family:inherit;font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:8px">Nuevo traslado</button>
+      </div>
+    </header>
+
+    <div style="height:52px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 40px;border-bottom:1px solid rgba(0,0,0,0.06);background:#fbfbfb">
+      <div style="height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 10px 0 12px;border-radius:9px;border:1px solid rgba(0,0,0,0.11);background:#ffffff;min-width:250px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="1.5"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.6-3.6" /></svg>
+        <span style="font-size:12px;color:#909090">Buscar producto, laboratorio o lote</span>
+      </div>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 6px 0 14px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);font-size:12px;font-weight:500;color:#171717">Sede<span style="height:20px;display:inline-flex;align-items:center;padding:0 8px;border-radius:999px;background:#f4f4f4;font-size:11px;font-weight:400;color:#555555">Todas · 6</span></span>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:9px;font-size:12px;font-weight:500;color:#555555">Categoría</span>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 6px 0 14px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);font-size:12px;font-weight:500;color:#171717">Estado<span style="height:20px;display:inline-flex;align-items:center;padding:0 8px;border-radius:999px;background:#f4f4f4;font-size:11px;font-weight:400;color:#555555">Requiere acción</span></span>
+      <span style="height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-radius:9px;font-size:12px;font-weight:500;color:#555555">Vencimiento</span>
+      <span style="margin-left:auto;font-size:11px;color:#727272">Sincronizado hace 4 s</span>
+    </div>
+
+    <main style="flex:1;min-height:0;display:flex;flex-direction:column;padding:32px 40px">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+        <div style="flex:1;min-height:0;overflow:hidden">
+          <table style="width:100%;border-collapse:collapse;text-align:left;table-layout:fixed">
+            <thead>
+              <tr>
+                <th style="width:24%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Producto</th>
+                <th style="width:13%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Laboratorio</th>
+                <th style="width:12%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Sede</th>
+                <th style="width:9%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Lote</th>
+                <th style="width:9%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Vence</th>
+                <th style="width:13%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Existencias</th>
+                <th style="width:20%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06);box-shadow:inset 2px 0 0 #171717;background:#e8e8e8">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Acetaminofén 500 mg × 100</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Genfar</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Chapinero</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">A-2291</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">03/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:88%;border-radius:999px;background:#0071e3"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">412</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Sales de rehidratación oral</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Tecnoquímicas</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Chapinero</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">R-0148</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">11/2026</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:12%;border-radius:999px;background:#9ec9f4"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">14</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#ece7df;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#8c6a33;margin-right:7px;vertical-align:1px"></span>Punto de reorden</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Losartán 50 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">MK</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Kennedy</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">L-7730</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">08/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:54%;border-radius:999px;background:#4c9bea"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">246</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Amoxicilina 500 mg × 20</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">La Santé</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Suba</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">M-3312</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">02/2026</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:38%;border-radius:999px;background:#7fb9f0"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">178</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#ece7df;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;border:1px solid #8c6a33;background:transparent;box-sizing:border-box;margin-right:7px;vertical-align:1px"></span>Vence en 5 meses</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Omeprazol 20 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Procaps</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Chapinero</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">O-5027</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">06/2028</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:100%;border-radius:999px;background:#0071e3"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">468</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e7eb;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4c6a86;margin-right:7px;vertical-align:1px"></span>Sobrestock · 94 días</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Ibuprofeno 400 mg × 50</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Genfar</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Kennedy</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">I-9004</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">09/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:4%;border-radius:999px;background:#9ec9f4"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">0</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#f1e2e1;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#b04a3f;margin-right:7px;vertical-align:1px"></span>Quiebre · hay 96 en Suba</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Metformina 850 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">MK</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Restrepo</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">F-1180</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">01/2028</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:62%;border-radius:999px;background:#3389e6"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">289</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Loratadina 10 mg × 10</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Tecnoquímicas</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Suba</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">T-4419</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">04/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:20%;border-radius:999px;background:#9ec9f4"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">63</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#ece7df;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#8c6a33;margin-right:7px;vertical-align:1px"></span>Punto de reorden</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Enalapril 20 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">La Santé</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Chapinero</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">E-6602</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">12/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:46%;border-radius:999px;background:#5fa8ed"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">214</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Atorvastatina 20 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Procaps</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Restrepo</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">V-2075</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">05/2026</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:30%;border-radius:999px;background:#9ec9f4"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">121</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#f1e2e1;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;border:1px solid #b04a3f;background:transparent;box-sizing:border-box;margin-right:7px;vertical-align:1px"></span>Vence en 8 meses</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Suero fisiológico 500 ml</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Baxter</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Bosa</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">S-8891</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">10/2028</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:70%;border-radius:999px;background:#1a7fe5"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">327</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Naproxeno 500 mg × 20</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Genfar</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Suba</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">N-1136</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">07/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:26%;border-radius:999px;background:#9ec9f4"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">89</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#ece7df;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#8c6a33;margin-right:7px;vertical-align:1px"></span>Punto de reorden</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Dipirona 500 mg × 10</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Tecnoquímicas</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Usme</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">D-3308</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">11/2027</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:58%;border-radius:999px;background:#4c9bea"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">263</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              <tr style="height:48px;border-bottom:1px solid rgba(0,0,0,0.06)">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Salbutamol inhalador 100 mcg</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Bayer</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Kennedy</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">B-7741</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">03/2026</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:8%;border-radius:999px;background:#9ec9f4"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">7</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#f1e2e1;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;border:1px solid #b04a3f;background:transparent;box-sizing:border-box;margin-right:7px;vertical-align:1px"></span>Vence en 6 meses</span></td>
+              </tr>
+              <tr style="height:48px">
+                <td style="padding:0 22px;font-size:14px;color:#171717">Hidroclorotiazida 25 mg × 30</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">MK</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555">Bosa</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">H-9928</td>
+                <td style="padding:0 22px;font-size:14px;color:#555555;font-variant-numeric:tabular-nums">02/2028</td>
+                <td style="padding:0 22px;text-align:right"><span style="display:inline-block;width:56px;height:4px;border-radius:999px;background:#e0eefc;vertical-align:3px"><span style="display:block;height:100%;width:34%;border-radius:999px;background:#87bff1"></span></span><span style="display:inline-block;min-width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:14px;color:#555555">142</span></td>
+                <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>Suficiente</span></td>
+              </tr>
+              
+              
+            </tbody>
+          </table>
+        </div>
+        <div style="height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 22px;border-top:1px solid rgba(0,0,0,0.06);background:#f4f4f4">
+          <span style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:11px;color:#727272;font-variant-numeric:tabular-nums">1-15 de 4.284</span>
+            <span style="font-size:11px;color:#6b6b6b">312 requieren acción</span>
+          </span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#727272">Filas<span style="height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:9px;border:1px solid rgba(0,0,0,0.11);background:#ffffff;color:#171717;font-variant-numeric:tabular-nums">25<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg></span></span>
+            <span style="width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:#c8c8c8"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6" /></svg></span>
+            <span style="min-width:32px;height:28px;padding:0 8px;border-radius:9px;background:#e8e8e8;color:#171717;font-weight:500;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-variant-numeric:tabular-nums">1</span>
+            <span style="min-width:32px;height:28px;padding:0 8px;border-radius:9px;color:#555555;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-variant-numeric:tabular-nums">2</span>
+            <span style="min-width:32px;height:28px;padding:0 8px;border-radius:9px;color:#555555;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-variant-numeric:tabular-nums">3</span>
+            <span style="padding:0 6px;font-size:11px;color:#c8c8c8">…</span>
+            <span style="min-width:32px;height:28px;padding:0 8px;border-radius:9px;color:#555555;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-variant-numeric:tabular-nums">172</span>
+            <span style="width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:#555555"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6" /></svg></span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div id="pantalla-panel" style="width:1600px;height:1000px;display:flex;overflow:hidden;background:#fbfbfb;color:#171717;font-size:14px;box-shadow:0 1px 2px rgba(20,20,20,0.04),0 18px 44px rgba(20,20,20,0.08)">
+  <nav style="width:280px;flex-shrink:0;display:flex;flex-direction:column;background:#f4f4f4;border-right:1px solid rgba(0,0,0,0.06)">
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid rgba(0,0,0,0.06)">
+      <span style="width:24px;height:24px;border-radius:4px;background:#171717;color:#fbfbfb;font-size:10px;font-weight:500;display:flex;align-items:center;justify-content:center">B</span>
+      <span style="flex:1;font-size:14px;font-weight:500;color:#171717">Droguerías La 45</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555555" stroke-width="1.5"><path d="M15 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9" /><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3z" /><path d="m11 9-3 3 3 3" /></svg>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;padding:12px 0;gap:2px">
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;background:#ffffff;color:#171717;font-weight:500">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>
+        <span>Panel</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5" /><path d="M12 12v9" /></svg>
+        <span>Inventario</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h2.5l2.6 12h11L21 7H6" /></svg>
+        <span>Compras</span>
+        <span style="margin-left:auto;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">12</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.6 12.6 12.6 20.6a2 2 0 0 1-2.8 0l-6.4-6.4V3.4h10.8l6.4 6.4a2 2 0 0 1 0 2.8Z" /><circle cx="8.5" cy="8.5" r="1.3" /></svg>
+        <span>Precios</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.2-4.4A8 8 0 0 1 13 4a8 8 0 0 1 8 8Z" /></svg>
+        <span>Mostrador</span>
+        <span style="margin-left:auto;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">3</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15" /><path d="M14 9h4a2 2 0 0 1 2 2v10" /><path d="M2 21h20" /><path d="M8 8h2M8 12h2M8 16h2" /></svg>
+        <span>Sedes</span>
+      </div>
+      <div style="margin:0 12px;height:38px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:9px;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 21h18" /><rect x="5" y="12" width="3.5" height="6" /><rect x="10.5" y="8" width="3.5" height="10" /><rect x="16" y="4" width="3.5" height="14" /></svg>
+        <span>Reportes</span>
+      </div>
+      <div style="flex:1"></div>
+      <span style="padding:0 20px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#909090">Botica 2.4.1</span>
+    </div>
+    <div style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 16px;border-top:1px solid rgba(0,0,0,0.06)">
+      <div style="flex:1;padding-left:4px;min-width:0">
+        <p style="margin:0;font-size:12px;color:#171717">Marcela Ríos</p>
+        <p style="margin:0;font-size:11px;color:#727272">Administradora</p>
+      </div>
+      <span style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#555555">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
+      </span>
+    </div>
+  </nav>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:64px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 40px;border-bottom:1px solid rgba(0,0,0,0.06);background:rgba(251,251,251,0.85)">
+      <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+        <p style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px;color:#727272">Panel<span style="color:#c8c8c8">/</span></p>
+        <h1 style="margin:0;font-size:28px;letter-spacing:-0.025em;font-weight:400;color:#171717">Resumen de red</h1>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <div style="height:34px;display:inline-flex;align-items:center;padding:3px;border-radius:9px;background:#f4f4f4;gap:2px">
+          <span style="height:28px;padding:0 14px;border-radius:7px;display:inline-flex;align-items:center;font-size:12px;color:#555555">7 días</span>
+          <span style="height:28px;padding:0 14px;border-radius:7px;display:inline-flex;align-items:center;font-size:12px;font-weight:500;color:#171717;background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.04)">30 días</span>
+          <span style="height:28px;padding:0 14px;border-radius:7px;display:inline-flex;align-items:center;font-size:12px;color:#555555">90 días</span>
+        </div>
+        <button style="height:34px;padding:0 16px;border-radius:9px;border:1px solid rgba(0,0,0,0.16);background:transparent;color:#171717;font-family:inherit;font-size:12px;font-weight:500">Exportar</button>
+      </div>
+    </header>
+
+    <main style="flex:1;min-height:0;display:flex;flex-direction:column;gap:16px;padding:32px 40px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;flex-shrink:0">
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;min-height:32px;font-size:12px;line-height:18px;color:#727272">Venta de la red</p>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">$412,8 M</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#6b6b6b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7" /></svg>6,4%</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b;font-variant-numeric:tabular-nums">contra $388,0 M en los 30 días previos</p>
+        </section>
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;min-height:32px;font-size:12px;line-height:18px;color:#727272">Margen bruto</p>
+          <div style="margin-top:12px;display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">24,8%</span>
+            <span style="font-size:12px;color:#727272;font-variant-numeric:tabular-nums">≥ 22%</span>
+          </div>
+          <div style="margin-top:14px;position:relative;height:6px;border-radius:999px;background:#e0eefc">
+            <span style="position:absolute;inset:0 auto 0 0;width:70%;border-radius:999px;background:#1a7fe5"></span>
+            <span style="position:absolute;top:-4px;bottom:-4px;width:2px;border-radius:999px;background:#909090;left:calc(62% - 1px)"></span>
+          </div>
+          <p style="margin:10px 0 0;font-size:11px;line-height:18px;color:#6b6b6b;font-variant-numeric:tabular-nums">+1,9 pp desde el ajuste de precios</p>
+        </section>
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;min-height:32px;font-size:12px;line-height:18px;color:#727272">Quiebres de stock</p>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">37</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#6b6b6b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7" /></svg>41%</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b;font-variant-numeric:tabular-nums">contra 63 en los 30 días previos</p>
+        </section>
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;min-height:32px;font-size:12px;line-height:18px;color:#727272">Inventario por vencer · 90 días</p>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+            <span style="font-size:36px;line-height:40px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">$18,9 M</span>
+            <span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#ece7df;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#8c6a33;margin-right:7px;vertical-align:1px"></span>142 lotes</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:11px;line-height:18px;color:#6b6b6b;font-variant-numeric:tabular-nums">4,6% del inventario valorizado</p>
+        </section>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;flex:1;min-height:0">
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Venta diaria de la red</p>
+          <p style="margin:8px 0 0;font-size:20px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">$13,7 M promedio por día</p>
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;padding-top:14px">
+            <div style="display:flex;align-items:flex-end;gap:1px;flex:1;min-height:120px;border-bottom:1px solid rgba(0,0,0,0.06)">
+              <span style="flex:1;height:52%;background:#9ec9f4"></span><span style="flex:1;height:61%;background:#9ec9f4"></span><span style="flex:1;height:44%;background:#9ec9f4"></span><span style="flex:1;height:58%;background:#9ec9f4"></span><span style="flex:1;height:72%;background:#7fb9f0"></span><span style="flex:1;height:81%;background:#5fa8ed"></span><span style="flex:1;height:38%;background:#9ec9f4"></span><span style="flex:1;height:49%;background:#9ec9f4"></span><span style="flex:1;height:66%;background:#9ec9f4"></span><span style="flex:1;height:57%;background:#9ec9f4"></span><span style="flex:1;height:63%;background:#9ec9f4"></span><span style="flex:1;height:76%;background:#7fb9f0"></span><span style="flex:1;height:88%;background:#3389e6"></span><span style="flex:1;height:41%;background:#9ec9f4"></span><span style="flex:1;height:54%;background:#9ec9f4"></span><span style="flex:1;height:69%;background:#9ec9f4"></span><span style="flex:1;height:60%;background:#9ec9f4"></span><span style="flex:1;height:71%;background:#7fb9f0"></span><span style="flex:1;height:84%;background:#4c9bea"></span><span style="flex:1;height:100%;background:#0071e3"></span><span style="flex:1;height:46%;background:#9ec9f4"></span><span style="flex:1;height:55%;background:#9ec9f4"></span><span style="flex:1;height:64%;background:#9ec9f4"></span><span style="flex:1;height:59%;background:#9ec9f4"></span><span style="flex:1;height:73%;background:#7fb9f0"></span><span style="flex:1;height:86%;background:#3389e6"></span><span style="flex:1;height:43%;background:#9ec9f4"></span><span style="flex:1;height:51%;background:#9ec9f4"></span><span style="flex:1;height:68%;background:#9ec9f4"></span><span style="flex:1;height:62%;background:#9ec9f4"></span>
+            </div>
+            <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:11px;color:#727272;font-variant-numeric:tabular-nums">
+              <span>27 jul</span>
+              <span>25 ago</span>
+            </div>
+          </div>
+        </section>
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Venta por sede</p>
+          <dl style="margin:12px 0 0;flex:1;display:flex;flex-direction:column;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:12px">
+              <dt style="width:76px;flex-shrink:0;font-size:11px;line-height:16px;color:#727272">Chapinero</dt>
+              <span style="flex:1;min-width:0;height:6px;border-radius:999px;background:#e0eefc"><span style="display:block;height:100%;width:100%;border-radius:999px;background:#0071e3"></span></span>
+              <dd style="margin:0;width:46px;flex-shrink:0;text-align:right;font-size:11px;line-height:16px;color:#555555;font-variant-numeric:tabular-nums">112 M</dd>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <dt style="width:76px;flex-shrink:0;font-size:11px;line-height:16px;color:#727272">Kennedy</dt>
+              <span style="flex:1;min-width:0;height:6px;border-radius:999px;background:#e0eefc"><span style="display:block;height:100%;width:79%;border-radius:999px;background:#2683e5"></span></span>
+              <dd style="margin:0;width:46px;flex-shrink:0;text-align:right;font-size:11px;line-height:16px;color:#555555;font-variant-numeric:tabular-nums">88 M</dd>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <dt style="width:76px;flex-shrink:0;font-size:11px;line-height:16px;color:#727272">Suba</dt>
+              <span style="flex:1;min-width:0;height:6px;border-radius:999px;background:#e0eefc"><span style="display:block;height:100%;width:68%;border-radius:999px;background:#4c9bea"></span></span>
+              <dd style="margin:0;width:46px;flex-shrink:0;text-align:right;font-size:11px;line-height:16px;color:#555555;font-variant-numeric:tabular-nums">76 M</dd>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <dt style="width:76px;flex-shrink:0;font-size:11px;line-height:16px;color:#727272">Restrepo</dt>
+              <span style="flex:1;min-width:0;height:6px;border-radius:999px;background:#e0eefc"><span style="display:block;height:100%;width:53%;border-radius:999px;background:#6cb0ef"></span></span>
+              <dd style="margin:0;width:46px;flex-shrink:0;text-align:right;font-size:11px;line-height:16px;color:#555555;font-variant-numeric:tabular-nums">59 M</dd>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <dt style="width:76px;flex-shrink:0;font-size:11px;line-height:16px;color:#727272">Bosa</dt>
+              <span style="flex:1;min-width:0;height:6px;border-radius:999px;background:#e0eefc"><span style="display:block;height:100%;width:43%;border-radius:999px;background:#87bff1"></span></span>
+              <dd style="margin:0;width:46px;flex-shrink:0;text-align:right;font-size:11px;line-height:16px;color:#555555;font-variant-numeric:tabular-nums">48 M</dd>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <dt style="width:76px;flex-shrink:0;font-size:11px;line-height:16px;color:#727272">Usme</dt>
+              <span style="flex:1;min-width:0;height:6px;border-radius:999px;background:#e0eefc"><span style="display:block;height:100%;width:26%;border-radius:999px;background:#9ec9f4"></span></span>
+              <dd style="margin:0;width:46px;flex-shrink:0;text-align:right;font-size:11px;line-height:16px;color:#555555;font-variant-numeric:tabular-nums">29 M</dd>
+            </div>
+          </dl>
+        </section>
+        <section style="display:flex;flex-direction:column;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;padding:16px;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+          <p style="margin:0;font-size:12px;line-height:18px;color:#727272">Sugerencias del asistente aceptadas</p>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:16px">
+            <svg viewBox="0 0 64 64" style="width:64px;height:64px;flex-shrink:0;transform:rotate(-90deg)">
+              <circle cx="32" cy="32" r="28.5" fill="none" stroke-width="7" stroke="#e0eefc"></circle>
+              <circle cx="32" cy="32" r="28.5" fill="none" stroke-width="7" stroke-linecap="round" stroke="#0071e3" stroke-dasharray="105 179"></circle>
+            </svg>
+            <div>
+              <p style="margin:0;font-size:28px;line-height:32px;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;color:#171717">58,6%</p>
+              <p style="margin:4px 0 0;font-size:11px;line-height:16px;color:#6b6b6b;font-variant-numeric:tabular-nums">3.412 de 5.824 sugerencias</p>
+            </div>
+          </div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(0,0,0,0.06);flex:1;display:flex;flex-direction:column;gap:10px">
+            <p style="margin:0 0 2px;font-family:'Geist Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#727272">Combinaciones más aceptadas</p>
+            <div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:#555555;font-variant-numeric:tabular-nums"><span>Suero oral + antidiarreico</span><span style="color:#171717">412</span></div>
+            <div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:#555555;font-variant-numeric:tabular-nums"><span>Analgésico + protector gástrico</span><span style="color:#171717">386</span></div>
+            <div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;color:#555555;font-variant-numeric:tabular-nums"><span>Antigripal + vitamina C</span><span style="color:#171717">341</span></div>
+            <div style="margin-top:auto;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06);display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#555555;font-variant-numeric:tabular-nums"><span>Ticket con sugerencia</span><span style="color:#171717">$41.200</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#555555;font-variant-numeric:tabular-nums"><span>Ticket sin sugerencia</span><span style="color:#171717">$28.700</span></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div style="flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;border-radius:16px;border:1px solid rgba(0,0,0,0.08);background:#ffffff;box-shadow:0 1px 2px rgba(20,20,20,0.02)">
+        <table style="width:100%;border-collapse:collapse;text-align:left;table-layout:fixed">
+          <thead>
+            <tr>
+              <th style="width:22%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Sede</th>
+              <th style="width:18%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Venta 30 d</th>
+              <th style="width:14%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Margen</th>
+              <th style="width:14%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Quiebres</th>
+              <th style="width:16%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap;text-align:right">Días de stock</th>
+              <th style="width:16%;height:40px;padding:0 22px;border-bottom:1px solid rgba(0,0,0,0.11);background:#f4f4f4;font-family:'Geist Mono',monospace;font-size:10px;font-weight:400;letter-spacing:0.18em;text-transform:uppercase;color:#727272;white-space:nowrap">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="height:44px;border-bottom:1px solid rgba(0,0,0,0.06)">
+              <td style="padding:0 22px;font-size:14px;color:#171717">Chapinero</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">$112.480.900</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">26,1%</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">4</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">38</td>
+              <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>En meta</span></td>
+            </tr>
+            <tr style="height:44px;border-bottom:1px solid rgba(0,0,0,0.06)">
+              <td style="padding:0 22px;font-size:14px;color:#171717">Kennedy</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">$88.104.300</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">25,4%</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">9</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">31</td>
+              <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>En meta</span></td>
+            </tr>
+            <tr style="height:44px;border-bottom:1px solid rgba(0,0,0,0.06)">
+              <td style="padding:0 22px;font-size:14px;color:#171717">Suba</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">$76.290.100</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">23,8%</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">6</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">44</td>
+              <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e7eb;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4c6a86;margin-right:7px;vertical-align:1px"></span>Sobrestock</span></td>
+            </tr>
+            <tr style="height:44px;border-bottom:1px solid rgba(0,0,0,0.06)">
+              <td style="padding:0 22px;font-size:14px;color:#171717">Restrepo</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">$59.870.400</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">24,2%</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">5</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">35</td>
+              <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>En meta</span></td>
+            </tr>
+            <tr style="height:44px;border-bottom:1px solid rgba(0,0,0,0.06)">
+              <td style="padding:0 22px;font-size:14px;color:#171717">Bosa</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">$48.115.700</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">21,3%</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">11</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">22</td>
+              <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#ece7df;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#8c6a33;margin-right:7px;vertical-align:1px"></span>Margen bajo meta</span></td>
+            </tr>
+            <tr style="height:44px">
+              <td style="padding:0 22px;font-size:14px;color:#171717">Usme</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">$29.006.200</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">22,7%</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">2</td>
+              <td style="padding:0 22px;font-size:14px;color:#555555;text-align:right;font-variant-numeric:tabular-nums">29</td>
+              <td style="padding:0 22px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e3e9e3;font-size:12px;line-height:16px;color:#171717;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#4e7a52;margin-right:7px;vertical-align:1px"></span>En meta</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+</div>
+</x-dc>
+</body>
+</html>
