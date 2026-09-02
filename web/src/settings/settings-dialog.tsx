@@ -7,6 +7,9 @@ import { EmptyState } from "@/ui/states";
 import { GeneralSection } from "./general";
 import { PeopleSection } from "./people";
 import { ActivitySection } from "./activity";
+import { CustomersSection } from "./catalog-customers";
+import { SuppliersSection } from "./catalog-suppliers";
+import { TaxonomySection } from "./catalog-taxonomy";
 import {
   SETTINGS_GROUPS,
   reachableSections,
@@ -120,6 +123,12 @@ function Dialog({ me, id }: { me: Me; id: string }) {
               <GeneralSection me={me} />
             ) : current?.id === "people" ? (
               <PeopleSection me={me} />
+            ) : current?.id === "catalog-taxonomy" ? (
+              <TaxonomySection me={me} />
+            ) : current?.id === "catalog-suppliers" ? (
+              <SuppliersSection me={me} />
+            ) : current?.id === "catalog-customers" ? (
+              <CustomersSection me={me} />
             ) : current?.id === "activity" ? (
               <ActivitySection />
             ) : (

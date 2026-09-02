@@ -2,7 +2,7 @@
 
 The operating platform for Colombian droguerías. `.docs/architecture.md` is the authority; `.docs/stages/` is how it gets built, in order.
 
-**This repository is at S0 — Skeleton.** Four containers against one Postgres, invite-only sign-in, the tenancy and audit substrate every later stage calls rather than rebuilds, and the application shell with one empty route per later-stage surface. It fills none of them.
+**This repository is at S1 — Catalog.** S0 built four containers against one Postgres, invite-only sign-in, the tenancy and audit substrate every later stage calls rather than rebuilds, and the application shell with one empty route per later-stage surface. S1 fills the first of them: one table for products and services, the registro INVIMA, IVA per line, the price editor that is the only thing in Botica that changes a price, an internal load tool, and a demo seed that builds Droguerías La 45 with 4.284 references.
 
 ## Bring it up
 
@@ -21,6 +21,21 @@ make seed PROFILE=default
 make seed PROFILE=minimal
 make web            # Vite on :5173, proxying /api to Django
 ```
+
+`make migrate TARGET="core 0004"` runs the graph backwards, which is how a stage
+checks that its own migrations reverse cleanly to the one before it.
+
+Loading a real network's master data is a management command and not a screen —
+there is no tenant-facing import wizard in v1:
+
+```
+.venv/bin/python manage.py load_catalog --tenant demo-la-45 --dir ./export
+.venv/bin/python manage.py load_catalog --tenant demo-la-45 --dir ./export --apply
+.venv/bin/python manage.py load_catalog --tenant demo-la-45 --dir . --columns
+```
+
+**A run is a dry run unless `--apply` is passed**, it writes an `imports` row
+either way, and it exits non-zero if any row failed.
 
 `make seed` prints what it wrote, the tenant id, and the accept link of every outstanding invitation — the only place those tokens exist outside the email, and admissible only because the command refuses any tenant whose slug does not begin `demo-`.
 
@@ -48,6 +63,19 @@ Two of them are the ones that matter and are invisible in every other check:
 | `web/src/ui/` | the design-system Part B component layer, including the counter-density tokens S4 selects and the four chart forms S9 uses |
 | `web/src/ui/format.ts` | the single Colombian formatter. The only place `Intl` is touched |
 | `web/src/shell/` | the shell, its seven role-gated routes and the settings dialog |
+
+## What S1 hands the chain
+
+| | |
+| --- | --- |
+| `items` and its three switches | `tracks_stock`, `tracks_lots`, `tracks_expiry` — what S3 reads to decide what a movement means. One table for products and services (A7) |
+| the base-unit rule | every quantity in the rest of the product is in `items.unit`, and `units_per_pack` is the only conversion |
+| `item_prices` | the resolution rule, and **one interactive write path**: `POST /api/items/{id}/prices`. S7 extends it and ships no second one (A11) |
+| `item_barcodes` | a code unique per tenant, so a scan resolves to exactly one item — what S2 syncs and S4 depends on at 50ms |
+| `customers` | for S4 to create at the counter and S5 to read as the acquirer. The Ley 1581 deletion rule is settled here |
+| `imports` | for S6's sales-history loader to record its runs in without a migration |
+| `core/catalog/demo.py` | the `catalog` fixture, the root every later stage's fixture declares a dependency on behind S0's identity fixture |
+| `web/src/catalog/item-combobox.tsx` | the catalog combobox S3's receiving, S4's product lookup, S6's order lines and S7's price grid all read |
 
 ## Where things are
 

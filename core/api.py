@@ -860,3 +860,17 @@ def read_audit_log(
         "page": page,
         "page_size": page_size,
     }
+
+
+# ---------------------------------------------------------------------------
+# S1 · the catalog
+#
+# One `NinjaAPI` and one generated client, so a stage adds a `Router` rather
+# than a second schema. The prefix is empty because every path in that module
+# already reads `/items`, `/customers`, `/imports` -- the `/api/` half is the
+# mount in `botica/urls.py` and belongs to nobody's router.
+# ---------------------------------------------------------------------------
+
+from core.catalog.api import router as catalog_router  # noqa: E402
+
+api.add_router("", catalog_router)

@@ -1,20 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { NAV } from "@/shell/nav";
-import { StageRoute } from "@/shell/stage-route";
-
-const ITEM = NAV.find((item) => item.key === "inventory")!;
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 /**
- * Inventario · `Existencias`. S0 ships the route and its empty state; S3 fills it.
+ * The Inventario module. §B.8.5 · one nav item, two routes switched by the
+ * drawn segmented control: `Catálogo` (S1) and `Existencias` (S3). This layout
+ * holds nothing of its own; each child draws its own header and title, because
+ * §B.8.5 allows exactly one `t-28` title per route.
  */
 export const Route = createFileRoute("/_app/inventory")({
-  component: () => (
-    <StageRoute
-      item={ITEM}
-      breadcrumb={["Inventario"]}
-      emptyTitle="Todavía no hay existencias"
-      title="Existencias"
-      body="Las existencias aparecen cuando se cargue el catálogo y se reciba la primera mercancía."
-    />
-  ),
+  component: () => <Outlet />,
 });

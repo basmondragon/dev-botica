@@ -131,3 +131,10 @@ def enqueue_invitation_email(invitation, token):
             "invitation %s is already queued for delivery under this key",
             invitation.id,
         )
+
+
+# Procrastinate's Django integration discovers `<app>/tasks.py` and nothing
+# deeper, so a stage whose jobs live in their own module registers them by
+# importing it here. One import per stage, and the worker's task list stays a
+# thing somebody can read in one place.
+from core.catalog import jobs  # noqa: E402,F401  -- registers S1's INVIMA sweep

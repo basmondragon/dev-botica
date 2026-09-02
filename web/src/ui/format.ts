@@ -126,8 +126,21 @@ export function since(value: Date | string, now: Date = new Date()): string {
   return `hace ${Math.floor(elapsed / 1000)}${NBSP}s`;
 }
 
+/** `2026-09-02` — a date the server sent with no time in it. */
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 function asDate(value: Date | string): Date {
-  return value instanceof Date ? value : new Date(value);
+  if (value instanceof Date) return value;
+  // A bare `YYYY-MM-DD` is parsed by `new Date()` as **UTC midnight**, and
+  // every getter below reads local calendar fields — so in Bogotá (UTC−5) an
+  // expiry of `2026-09-02` renders as `01/09`. Every date-only value in this
+  // product is a day the pharmacy means, not an instant, so it is built in the
+  // local calendar. A timestamp with a time in it keeps its own parsing.
+  const parts = DATE_ONLY.exec(value);
+  if (parts) {
+    return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+  }
+  return new Date(value);
 }
 
 export const NON_BREAKING_SPACE = NBSP;

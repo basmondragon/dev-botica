@@ -638,6 +638,1338 @@
           }
         ]
       }
+    },
+    "/api/items": {
+      "get": {
+        "operationId": "core_catalog_api_list_items",
+        "summary": "List Items",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "product",
+                    "service"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "manufacturer_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Manufacturer Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "invima_status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "valid",
+                    "in_process",
+                    "expired",
+                    "not_applicable"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Invima Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "schema": {
+              "default": "true",
+              "enum": [
+                "true",
+                "false",
+                "all"
+              ],
+              "title": "Active",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "barcode",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Barcode"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ItemRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The catalog grid, server-paginated and server-sorted (§9).\n\nA `cashier` reads it and writes nothing. Sede scoping does not apply: the\ncatalog is the network's (§2, A2).",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_item",
+        "summary": "Create Item",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a product or a service, in the same editor (A7).\n\n**It writes no price.** A11 is a structural property only while\n`item_prices` has one interactive writer, and \"one\" has to mean one endpoint\n-- a create that also priced would be the second, however carefully it\nrouted through the same service. The panel saves the product and then posts\nits opening price to `/api/items/{id}/prices`, which is one press for the\nperson and two calls on the wire.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/items/summary": {
+      "get": {
+        "operationId": "core_catalog_api_catalog_summary",
+        "summary": "Catalog Summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogSummaryOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "`4.284 referencias activas · 12 servicios`, and `18 con registro\nvencido`. Three counts over the tenant, in one round trip.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/items/{item_id}": {
+      "get": {
+        "operationId": "core_catalog_api_read_item",
+        "summary": "Read Item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One item with its barcodes, its supplier links and its prices per scope.\n\nA `cashier` reads it without `supplier_items.cost` or `service_cost` --\npurchasing figures are not on a counter person's screen (§B.8.3).",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_catalog_api_patch_item",
+        "summary": "Patch Item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Edit the item, including its barcode set as an array.\n\nThere is no `DELETE /api/items/{id}` and there will not be one: every later\ntable in the product references `items`, and a hard-deleted item is a hole\nin a ticket, a stock ledger and a fiscal record. `active = false` is the only\nremoval, and §2's hard-delete right applies to users, not to catalog rows.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/items/{item_id}/prices": {
+      "get": {
+        "operationId": "core_catalog_api_list_prices",
+        "summary": "List Prices",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PriceOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Every price row for the item, per scope, with its window and `source`.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_price",
+        "summary": "Create Price",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "**The only endpoint in the product that writes a price** (A11).\n\nCreates a row and closes the open row in the same scope in the same\ntransaction. `source` is `manual` from this endpoint always and\n`set_by_user_id` is the caller -- neither is accepted from the body.\n\nS7 extends this endpoint. It does not ship a second one: a bulk apply, a\nscheduled repricing or an `Aplicar todas` restores precisely the failure A11\nremoved -- a model's number reaching every till without a person having\ntyped or confirmed it.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/item-prices/{price_id}": {
+      "delete": {
+        "operationId": "core_catalog_api_withdraw_price",
+        "summary": "Withdraw Price",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "price_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Price Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceWithdrawOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Take a price row out of play, and say which of the two things happened.\n\nA future-dated row that was never in force is removed; a row that has been\nin force is closed instead, because it is what a past sale was made at. A\nclosed sede override returns that sede to the network price by the\nresolution rule, with no further edit.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/manufacturers": {
+      "get": {
+        "operationId": "core_catalog_api_list_manufacturers",
+        "summary": "List Manufacturers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ManufacturerOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "The laboratorios, with the reference count the settings section links\ninto the catalog grid with.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_manufacturer",
+        "summary": "Create Manufacturer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManufacturerOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManufacturerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/manufacturers/{manufacturer_id}": {
+      "patch": {
+        "operationId": "core_catalog_api_patch_manufacturer",
+        "summary": "Patch Manufacturer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "manufacturer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Manufacturer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManufacturerOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManufacturerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_catalog_api_delete_manufacturer",
+        "summary": "Delete Manufacturer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "manufacturer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Manufacturer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "operationId": "core_catalog_api_list_categories",
+        "summary": "List Categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Two levels, in reading order: a parent, then its children.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_category",
+        "summary": "Create Category",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/categories/{category_id}": {
+      "patch": {
+        "operationId": "core_catalog_api_patch_category",
+        "summary": "Patch Category",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Category Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_catalog_api_delete_category",
+        "summary": "Delete Category",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Category Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/suppliers": {
+      "get": {
+        "operationId": "core_catalog_api_list_suppliers",
+        "summary": "List Suppliers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupplierOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_supplier",
+        "summary": "Create Supplier",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/suppliers/{supplier_id}": {
+      "patch": {
+        "operationId": "core_catalog_api_patch_supplier",
+        "summary": "Patch Supplier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supplier_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Supplier Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_catalog_api_delete_supplier",
+        "summary": "Delete Supplier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "supplier_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Supplier Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/supplier-items": {
+      "get": {
+        "operationId": "core_catalog_api_list_supplier_items",
+        "summary": "List Supplier Items",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "supplier_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Supplier Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SupplierItemOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "The supplier↔item links. Read by item from the item editor, by supplier\nfrom the settings section, and by item again by S6.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_supplier_item",
+        "summary": "Create Supplier Item",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierItemOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierItemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/supplier-items/{link_id}": {
+      "patch": {
+        "operationId": "core_catalog_api_patch_supplier_item",
+        "summary": "Patch Supplier Item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Link Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupplierItemOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupplierItemPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_catalog_api_delete_supplier_item",
+        "summary": "Delete Supplier Item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Link Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/customers": {
+      "get": {
+        "operationId": "core_catalog_api_list_customers",
+        "summary": "List Customers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CustomerOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The clientes. `q` matches document and name.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_catalog_api_create_customer",
+        "summary": "Create Customer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/customers/{customer_id}": {
+      "get": {
+        "operationId": "core_catalog_api_read_customer",
+        "summary": "Read Customer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_catalog_api_patch_customer",
+        "summary": "Patch Customer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Edit identity and consent. Setting `data_consent` stamps\n`data_consent_at` server-side -- a boolean alone cannot answer *when*, and\nLey 1581 asks (§7).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_catalog_api_delete_customer",
+        "summary": "Delete Customer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Customer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDeleteOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A Ley 1581 deletion, in the two shapes the data admits.\n\nA customer no sale references is removed outright -- the ordinary case of a\nrow typed wrong at the counter two minutes ago. A customer any `sales` row\nreferences is **never hard-deleted**: the identifying fields are erased in\nplace and the row survives, because S5 builds the acquirer block by reading\nthe customer *through the sale* at the moment it hands the sale over, and a\nsale that lost its customer is a ticket whose counterpart in the client's\ninvoicing system names a person Botica can no longer produce.\n\nNo column records the erasure. This mutation already writes an `audit_log`\nrow carrying the actor, the entity and both before and after, which is what\nanswers \"who erased this and when\"; a flag would be a second truth to keep\nin step with the empty fields.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/imports": {
+      "get": {
+        "operationId": "core_catalog_api_list_imports",
+        "summary": "List Imports",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ImportOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The load-run log: kind, source, status, counts and the per-row error\nlist. Read-only -- runs are created by the command, never by this endpoint.\n\nIt is how an administrator sees what onboarding did to their catalog without\nasking us.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1471,6 +2803,2066 @@
           "page_size"
         ],
         "title": "Page[AuditRowOut]",
+        "type": "object"
+      },
+      "ItemRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "product",
+              "service"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "invima_registration": {
+            "title": "Invima Registration",
+            "type": "string"
+          },
+          "invima_status": {
+            "enum": [
+              "valid",
+              "in_process",
+              "expired",
+              "not_applicable"
+            ],
+            "title": "Invima Status",
+            "type": "string"
+          },
+          "invima_expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invima Expires At"
+          },
+          "vat_class": {
+            "enum": [
+              "excluded",
+              "exempt",
+              "rate_5",
+              "rate_19"
+            ],
+            "title": "Vat Class",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "splittable": {
+            "title": "Splittable",
+            "type": "boolean"
+          },
+          "units_per_pack": {
+            "title": "Units Per Pack",
+            "type": "integer"
+          },
+          "tracks_stock": {
+            "title": "Tracks Stock",
+            "type": "boolean"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "presentation",
+          "manufacturer_id",
+          "manufacturer_name",
+          "category_id",
+          "category_name",
+          "invima_registration",
+          "invima_status",
+          "invima_expires_at",
+          "vat_class",
+          "unit",
+          "splittable",
+          "units_per_pack",
+          "tracks_stock",
+          "active",
+          "price"
+        ],
+        "title": "ItemRow",
+        "type": "object"
+      },
+      "Page_ItemRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ItemRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ItemRow]",
+        "type": "object"
+      },
+      "BarcodeOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "is_primary"
+        ],
+        "title": "BarcodeOut",
+        "type": "object"
+      },
+      "ItemDetail": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "product",
+              "service"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "invima_registration": {
+            "title": "Invima Registration",
+            "type": "string"
+          },
+          "invima_status": {
+            "enum": [
+              "valid",
+              "in_process",
+              "expired",
+              "not_applicable"
+            ],
+            "title": "Invima Status",
+            "type": "string"
+          },
+          "invima_expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invima Expires At"
+          },
+          "vat_class": {
+            "enum": [
+              "excluded",
+              "exempt",
+              "rate_5",
+              "rate_19"
+            ],
+            "title": "Vat Class",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "splittable": {
+            "title": "Splittable",
+            "type": "boolean"
+          },
+          "units_per_pack": {
+            "title": "Units Per Pack",
+            "type": "integer"
+          },
+          "tracks_stock": {
+            "title": "Tracks Stock",
+            "type": "boolean"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "active_ingredient": {
+            "title": "Active Ingredient",
+            "type": "string"
+          },
+          "strength": {
+            "title": "Strength",
+            "type": "string"
+          },
+          "requires_prescription": {
+            "title": "Requires Prescription",
+            "type": "boolean"
+          },
+          "controlled": {
+            "title": "Controlled",
+            "type": "boolean"
+          },
+          "cold_chain": {
+            "title": "Cold Chain",
+            "type": "boolean"
+          },
+          "tracks_lots": {
+            "title": "Tracks Lots",
+            "type": "boolean"
+          },
+          "tracks_expiry": {
+            "title": "Tracks Expiry",
+            "type": "boolean"
+          },
+          "custom": {
+            "additionalProperties": true,
+            "title": "Custom",
+            "type": "object"
+          },
+          "external_code": {
+            "title": "External Code",
+            "type": "string"
+          },
+          "service_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Cost"
+          },
+          "regulated_max_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Max Price"
+          },
+          "cap_status": {
+            "title": "Cap Status",
+            "type": "string"
+          },
+          "barcodes": {
+            "items": {
+              "$ref": "#/components/schemas/BarcodeOut"
+            },
+            "title": "Barcodes",
+            "type": "array"
+          },
+          "supplier_items": {
+            "items": {
+              "$ref": "#/components/schemas/SupplierItemOut"
+            },
+            "title": "Supplier Items",
+            "type": "array"
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/PriceOut"
+            },
+            "title": "Prices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "presentation",
+          "manufacturer_id",
+          "manufacturer_name",
+          "category_id",
+          "category_name",
+          "invima_registration",
+          "invima_status",
+          "invima_expires_at",
+          "vat_class",
+          "unit",
+          "splittable",
+          "units_per_pack",
+          "tracks_stock",
+          "active",
+          "price",
+          "description",
+          "active_ingredient",
+          "strength",
+          "requires_prescription",
+          "controlled",
+          "cold_chain",
+          "tracks_lots",
+          "tracks_expiry",
+          "custom",
+          "external_code",
+          "service_cost",
+          "regulated_max_price",
+          "cap_status",
+          "barcodes",
+          "supplier_items",
+          "prices"
+        ],
+        "title": "ItemDetail",
+        "type": "object"
+      },
+      "PriceOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "source": {
+            "enum": [
+              "manual",
+              "imported"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "set_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By User Id"
+          },
+          "set_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By Name"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "price",
+          "effective_from",
+          "effective_to",
+          "source",
+          "proposal_id",
+          "set_by_user_id",
+          "set_by_name",
+          "current"
+        ],
+        "title": "PriceOut",
+        "type": "object"
+      },
+      "SupplierItemOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "supplier_id": {
+            "format": "uuid",
+            "title": "Supplier Id",
+            "type": "string"
+          },
+          "supplier_name": {
+            "title": "Supplier Name",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "supplier_code": {
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
+          "min_order_pack": {
+            "title": "Min Order Pack",
+            "type": "integer"
+          },
+          "is_preferred": {
+            "title": "Is Preferred",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "supplier_id",
+          "supplier_name",
+          "item_id",
+          "item_name",
+          "supplier_code",
+          "cost",
+          "min_order_pack",
+          "is_preferred"
+        ],
+        "title": "SupplierItemOut",
+        "type": "object"
+      },
+      "BarcodeIn": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "is_primary": {
+            "default": false,
+            "title": "Is Primary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "BarcodeIn",
+        "type": "object"
+      },
+      "ItemIn": {
+        "properties": {
+          "type": {
+            "enum": [
+              "product",
+              "service"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "vat_class": {
+            "enum": [
+              "excluded",
+              "exempt",
+              "rate_5",
+              "rate_19"
+            ],
+            "title": "Vat Class",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "invima_status": {
+            "default": "not_applicable",
+            "enum": [
+              "valid",
+              "in_process",
+              "expired",
+              "not_applicable"
+            ],
+            "title": "Invima Status",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "presentation": {
+            "default": "",
+            "title": "Presentation",
+            "type": "string"
+          },
+          "active_ingredient": {
+            "default": "",
+            "title": "Active Ingredient",
+            "type": "string"
+          },
+          "strength": {
+            "default": "",
+            "title": "Strength",
+            "type": "string"
+          },
+          "invima_registration": {
+            "default": "",
+            "title": "Invima Registration",
+            "type": "string"
+          },
+          "invima_expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invima Expires At"
+          },
+          "requires_prescription": {
+            "default": false,
+            "title": "Requires Prescription",
+            "type": "boolean"
+          },
+          "controlled": {
+            "default": false,
+            "title": "Controlled",
+            "type": "boolean"
+          },
+          "cold_chain": {
+            "default": false,
+            "title": "Cold Chain",
+            "type": "boolean"
+          },
+          "splittable": {
+            "default": false,
+            "title": "Splittable",
+            "type": "boolean"
+          },
+          "units_per_pack": {
+            "default": 1,
+            "title": "Units Per Pack",
+            "type": "integer"
+          },
+          "tracks_stock": {
+            "default": true,
+            "title": "Tracks Stock",
+            "type": "boolean"
+          },
+          "tracks_lots": {
+            "default": true,
+            "title": "Tracks Lots",
+            "type": "boolean"
+          },
+          "tracks_expiry": {
+            "default": true,
+            "title": "Tracks Expiry",
+            "type": "boolean"
+          },
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "custom": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Custom",
+            "type": "object"
+          },
+          "external_code": {
+            "default": "",
+            "title": "External Code",
+            "type": "string"
+          },
+          "service_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Cost"
+          },
+          "barcodes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BarcodeIn"
+            },
+            "title": "Barcodes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "type",
+          "name",
+          "vat_class",
+          "unit"
+        ],
+        "title": "ItemIn",
+        "type": "object"
+      },
+      "CatalogSummaryOut": {
+        "description": "The filter bar's provenance line and the footer's annotation.\n\nBoth are **tenant-wide and ignore the active filters**, exactly as the\nhandoff draws `312 requieren acción` beside `1-15 de 4.284`: they describe\nthe catalog, not the view. A count that moved with the filters would be a\ndifferent number every keystroke and would answer no question.",
+        "properties": {
+          "active_items": {
+            "title": "Active Items",
+            "type": "integer"
+          },
+          "services": {
+            "title": "Services",
+            "type": "integer"
+          },
+          "expired_registrations": {
+            "title": "Expired Registrations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_items",
+          "services",
+          "expired_registrations"
+        ],
+        "title": "CatalogSummaryOut",
+        "type": "object"
+      },
+      "ItemPatch": {
+        "properties": {
+          "type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "product",
+                  "service"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "vat_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "excluded",
+                  "exempt",
+                  "rate_5",
+                  "rate_19"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vat Class"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "invima_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "valid",
+                  "in_process",
+                  "expired",
+                  "not_applicable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invima Status"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "manufacturer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Id"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "clear_manufacturer": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Manufacturer"
+          },
+          "clear_category": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Category"
+          },
+          "presentation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presentation"
+          },
+          "active_ingredient": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Ingredient"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strength"
+          },
+          "invima_registration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invima Registration"
+          },
+          "invima_expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invima Expires At"
+          },
+          "clear_invima_expires_at": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Invima Expires At"
+          },
+          "requires_prescription": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Prescription"
+          },
+          "controlled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Controlled"
+          },
+          "cold_chain": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cold Chain"
+          },
+          "splittable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Splittable"
+          },
+          "units_per_pack": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units Per Pack"
+          },
+          "tracks_stock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracks Stock"
+          },
+          "tracks_lots": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracks Lots"
+          },
+          "tracks_expiry": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tracks Expiry"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom"
+          },
+          "external_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Code"
+          },
+          "service_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Cost"
+          },
+          "barcodes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/BarcodeIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcodes"
+          }
+        },
+        "title": "ItemPatch",
+        "type": "object"
+      },
+      "PriceIn": {
+        "properties": {
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Price"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          }
+        },
+        "required": [
+          "price"
+        ],
+        "title": "PriceIn",
+        "type": "object"
+      },
+      "PriceWithdrawOut": {
+        "properties": {
+          "outcome": {
+            "enum": [
+              "deleted",
+              "closed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "detail"
+        ],
+        "title": "PriceWithdrawOut",
+        "type": "object"
+      },
+      "ManufacturerOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nit": {
+            "title": "Nit",
+            "type": "string"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "nit"
+        ],
+        "title": "ManufacturerOut",
+        "type": "object"
+      },
+      "ManufacturerIn": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nit": {
+            "default": "",
+            "title": "Nit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ManufacturerIn",
+        "type": "object"
+      },
+      "CategoryOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "parent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Name"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "parent_id",
+          "parent_name"
+        ],
+        "title": "CategoryOut",
+        "type": "object"
+      },
+      "CategoryIn": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CategoryIn",
+        "type": "object"
+      },
+      "SupplierOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "nit": {
+            "title": "Nit",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "contact": {
+            "title": "Contact",
+            "type": "string"
+          },
+          "payment_terms": {
+            "title": "Payment Terms",
+            "type": "string"
+          },
+          "lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Days"
+          },
+          "item_count": {
+            "default": 0,
+            "title": "Item Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "nit",
+          "name",
+          "contact",
+          "payment_terms",
+          "lead_time_days"
+        ],
+        "title": "SupplierOut",
+        "type": "object"
+      },
+      "SupplierIn": {
+        "properties": {
+          "nit": {
+            "default": "",
+            "title": "Nit",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "contact": {
+            "default": "",
+            "title": "Contact",
+            "type": "string"
+          },
+          "payment_terms": {
+            "default": "",
+            "title": "Payment Terms",
+            "type": "string"
+          },
+          "lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Days"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SupplierIn",
+        "type": "object"
+      },
+      "SupplierItemIn": {
+        "properties": {
+          "supplier_id": {
+            "format": "uuid",
+            "title": "Supplier Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "supplier_code": {
+            "default": "",
+            "title": "Supplier Code",
+            "type": "string"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
+          "min_order_pack": {
+            "default": 1,
+            "title": "Min Order Pack",
+            "type": "integer"
+          },
+          "is_preferred": {
+            "default": false,
+            "title": "Is Preferred",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "supplier_id",
+          "item_id"
+        ],
+        "title": "SupplierItemIn",
+        "type": "object"
+      },
+      "SupplierItemPatch": {
+        "properties": {
+          "supplier_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Code"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
+          "min_order_pack": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Order Pack"
+          },
+          "is_preferred": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Preferred"
+          }
+        },
+        "title": "SupplierItemPatch",
+        "type": "object"
+      },
+      "CustomerOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "document_type": {
+            "enum": [
+              "CC",
+              "CE",
+              "NIT",
+              "TI",
+              "PA",
+              "PEP",
+              "PPT",
+              ""
+            ],
+            "title": "Document Type",
+            "type": "string"
+          },
+          "document": {
+            "title": "Document",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "data_consent": {
+            "title": "Data Consent",
+            "type": "boolean"
+          },
+          "data_consent_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Consent At"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "erased": {
+            "title": "Erased",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "document",
+          "name",
+          "phone",
+          "email",
+          "address",
+          "data_consent",
+          "data_consent_at",
+          "notes",
+          "erased"
+        ],
+        "title": "CustomerOut",
+        "type": "object"
+      },
+      "Page_CustomerOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[CustomerOut]",
+        "type": "object"
+      },
+      "CustomerIn": {
+        "properties": {
+          "document_type": {
+            "default": "",
+            "enum": [
+              "CC",
+              "CE",
+              "NIT",
+              "TI",
+              "PA",
+              "PEP",
+              "PPT",
+              ""
+            ],
+            "title": "Document Type",
+            "type": "string"
+          },
+          "document": {
+            "default": "",
+            "title": "Document",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "default": "",
+            "title": "Phone",
+            "type": "string"
+          },
+          "email": {
+            "default": "",
+            "title": "Email",
+            "type": "string"
+          },
+          "address": {
+            "default": "",
+            "title": "Address",
+            "type": "string"
+          },
+          "data_consent": {
+            "default": false,
+            "title": "Data Consent",
+            "type": "boolean"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "title": "CustomerIn",
+        "type": "object"
+      },
+      "CustomerPatch": {
+        "properties": {
+          "document_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "CC",
+                  "CE",
+                  "NIT",
+                  "TI",
+                  "PA",
+                  "PEP",
+                  "PPT",
+                  ""
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Type"
+          },
+          "document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "data_consent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Consent"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "CustomerPatch",
+        "type": "object"
+      },
+      "CustomerDeleteOut": {
+        "description": "An administrator who pressed one button is owed the difference.",
+        "properties": {
+          "outcome": {
+            "enum": [
+              "deleted",
+              "erased"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "sale_count": {
+            "title": "Sale Count",
+            "type": "integer"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "sale_count",
+          "detail"
+        ],
+        "title": "CustomerDeleteOut",
+        "type": "object"
+      },
+      "ImportOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "rows_read": {
+            "title": "Rows Read",
+            "type": "integer"
+          },
+          "rows_created": {
+            "title": "Rows Created",
+            "type": "integer"
+          },
+          "rows_updated": {
+            "title": "Rows Updated",
+            "type": "integer"
+          },
+          "rows_failed": {
+            "title": "Rows Failed",
+            "type": "integer"
+          },
+          "errors": {
+            "items": {},
+            "title": "Errors",
+            "type": "array"
+          },
+          "started_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started By Name"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source",
+          "status",
+          "dry_run",
+          "started_at",
+          "finished_at",
+          "rows_read",
+          "rows_created",
+          "rows_updated",
+          "rows_failed",
+          "errors",
+          "started_by_name"
+        ],
+        "title": "ImportOut",
+        "type": "object"
+      },
+      "Page_ImportOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ImportOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ImportOut]",
         "type": "object"
       }
     },

@@ -1,5 +1,12 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { Building2, ScrollText, Users } from "lucide-react";
+import {
+  Building2,
+  FlaskConical,
+  ScrollText,
+  Truck,
+  UserRound,
+  Users,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Role } from "@/api/queries";
 
@@ -14,13 +21,15 @@ export interface SettingsSection {
 const OFFICE: Role[] = ["owner", "admin", "platform_admin"];
 
 /**
- * §B.8.4·4 · **S0 renders three rail items and no more.** A section a later
- * stage owns is not in the rail at all: §B.10.2's rule is that a section a
- * capability can empty is gated at its header, not inside its body.
+ * §B.8.4·4 · a section a later stage owns is not in the rail at all: §B.10.2's
+ * rule is that a section a capability can empty is gated at its header, not
+ * inside its body.
  *
- * The full rail design-system names -- Sedes y dispositivos, Facturación
- * electrónica, Precios y topes, Asistente, Cumplimiento, Exportaciones -- is
- * added by the stages that own those sections.
+ * S0 shipped three items under **Organización** and **Registros**; S1 adds the
+ * **Catálogo** group and its three. The rest of the rail design-system names --
+ * Sedes y dispositivos, Facturación electrónica, Precios y topes, Asistente,
+ * Cumplimiento, Exportaciones -- is added by the stages that own those
+ * sections.
  */
 export const SETTINGS: SettingsSection[] = [
   {
@@ -38,6 +47,27 @@ export const SETTINGS: SettingsSection[] = [
     roles: OFFICE,
   },
   {
+    id: "catalog-taxonomy",
+    label: "Laboratorios y categorías",
+    group: "Catálogo",
+    icon: FlaskConical,
+    roles: OFFICE,
+  },
+  {
+    id: "catalog-suppliers",
+    label: "Proveedores",
+    group: "Catálogo",
+    icon: Truck,
+    roles: OFFICE,
+  },
+  {
+    id: "catalog-customers",
+    label: "Clientes",
+    group: "Catálogo",
+    icon: UserRound,
+    roles: OFFICE,
+  },
+  {
     id: "activity",
     label: "Actividad",
     group: "Registros",
@@ -46,7 +76,11 @@ export const SETTINGS: SettingsSection[] = [
   },
 ];
 
-export const SETTINGS_GROUPS = ["Organización", "Registros"] as const;
+export const SETTINGS_GROUPS = [
+  "Organización",
+  "Catálogo",
+  "Registros",
+] as const;
 
 export function sectionById(id: string | undefined) {
   return SETTINGS.find((section) => section.id === id);

@@ -1,4 +1,4 @@
-.PHONY: setup up down db migrate rls test seed platform-admin schema check check-server format format-check web
+.PHONY: setup up down db migrate makemigrations rls test seed script platform-admin schema check check-server format format-check web
 
 -include .env
 
@@ -27,8 +27,13 @@ down:
 db:
 	docker compose up -d postgres
 
+# `make migrate TARGET="core 0004"` runs the graph backwards, which is the only
+# way to check that this stage's migrations reverse cleanly to the previous one.
 migrate:
-	$(DB_ENV) BOTICA_DB_ROLE=migration $(PY) manage.py migrate
+	$(DB_ENV) BOTICA_DB_ROLE=migration $(PY) manage.py migrate $(TARGET)
+
+makemigrations:
+	$(DB_ENV) BOTICA_DB_ROLE=migration $(PY) manage.py makemigrations core $(ARGS)
 
 rls:
 	$(DB_ENV) $(PY) manage.py check_rls
@@ -44,6 +49,12 @@ test:
 seed:
 	$(DB_ENV) $(PY) manage.py seed_demo_tenant --profile $(PROFILE)
 
+# `make script FILE=path.py ARGS=...` runs a one-off against the dev database
+# with the same env every other target uses. It is for throwaway checks, not
+# for anything the product needs.
+script:
+	$(DB_ENV) BOTICA_DB_ROLE=migration $(PY) $(FILE) $(ARGS)
+
 platform-admin:
 	$(DB_ENV) BOTICA_DB_ROLE=migration $(PY) manage.py create_platform_admin \
 	  --email $(EMAIL) --name "$(NAME)"
@@ -54,6 +65,9 @@ schema:
 
 check-server:
 	$(DB_ENV) $(PY) manage.py check_rls
+	# The model state and the migration state have to agree, or the next stage's
+	# `makemigrations` writes this stage's missing migration into its own.
+	$(DB_ENV) BOTICA_DB_ROLE=migration $(PY) manage.py makemigrations --check --dry-run
 	$(PY) -m ruff check .
 	$(PY) -m ruff format --check .
 	$(DB_ENV) $(PY) -m mypy core botica

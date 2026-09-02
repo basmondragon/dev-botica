@@ -82,3 +82,36 @@ describe("the Colombian formatter", () => {
     expect(stamp(old)).toBe("al 31/08 06:00");
   });
 });
+
+describe("§A.11 · the rounding happens once, at the line total", () => {
+  // S1's base-unit rule: a box of 30 at $12.500 divides to $416,67 a tableta.
+  const UNIT = 12500 / 30;
+
+  it("charges three tabletas as $1.250, not $1.251", () => {
+    // Half-up on the total.
+    expect(money(3 * UNIT)).toBe("$1.250");
+    // And the failure this rule exists to prevent: rounding the unit price
+    // first returns a different amount than the box does, and the drift is
+    // invisible until somebody reads a margin report.
+    expect(money(3 * Math.round(UNIT))).toBe("$1.251");
+  });
+
+  it("charges the whole box at the box price", () => {
+    expect(money(30 * UNIT)).toBe("$12.500");
+  });
+});
+
+describe("§A.11 · a date the server sent with no time in it", () => {
+  // `new Date("2026-09-02")` is UTC midnight, and every getter here reads local
+  // calendar fields — so west of Greenwich a bare date renders one day early.
+  it("renders a bare date in the local calendar, not one day early", () => {
+    expect(dayMonth("2026-09-02")).toBe("02/09");
+    expect(monthYear("2027-03-01")).toBe("03/2027");
+    expect(dayMonth("2026-01-01")).toBe("01/01");
+  });
+
+  it("still parses a timestamp as an instant", () => {
+    const stamped = new Date(2026, 7, 31, 6, 0, 0);
+    expect(dayMonth(stamped.toISOString())).toBe("31/08");
+  });
+});

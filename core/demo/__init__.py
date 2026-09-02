@@ -28,3 +28,7 @@ __all__ = [
 ]
 
 from core.demo import identity  # noqa: E402,F401  -- registers "identity"
+
+# S1's fixture, and the pattern every later stage follows: one import per stage,
+# registering one fixture that declares what it writes and what it needs first.
+from core.catalog import demo as catalog  # noqa: E402,F401  -- registers "catalog"

@@ -163,6 +163,22 @@ export const TENANT_STATUS: Record<string, Meaning> = {
   suspended: { family: "warning", dot: "solid", label: "Suspendida" },
 };
 
+/**
+ * §B.7.4 · `items.invima_status`. Botica surfaces the state and records the
+ * pharmacy's own decision; it does not block a sale on it and does not validate
+ * against INVIMA's register. So `expired` is a **badge and a filter, and never
+ * a disabled row**.
+ *
+ * `in_process` is hollow because INVIMA has the file: the system is waiting on
+ * something outside itself (§B.7.2).
+ */
+export const INVIMA_STATUS: Record<string, Meaning> = {
+  valid: { family: "positive", dot: "solid", label: "Registro vigente" },
+  in_process: { family: "warning", dot: "hollow", label: "En trámite" },
+  expired: { family: "critical", dot: "solid", label: "Registro vencido" },
+  not_applicable: { family: "neutral", dot: "hollow", label: "No aplica" },
+};
+
 export const LOCATION_STATUS: Record<string, Meaning> = {
   active: { family: "positive", dot: "solid", label: "Activa" },
   closed: { family: "neutral", dot: "solid", label: "Cerrada" },
