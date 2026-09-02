@@ -131,13 +131,13 @@ The catalog holds **everything a location can put on a ticket**, and that includ
 
 | Table | Carries |
 |---|---|
-| `items` | `type` (`product` \| `service`), `name`, `description`, `manufacturer_id`, `category_id`, `presentation`, `active_ingredient`, `strength`, **`invima_registration`**, `invima_expires_at`, `invima_status` (`valid` \| `in_process` \| `expired` \| `not_applicable`), `requires_prescription`, `controlled`, `cold_chain`, `unit`, `splittable` + `units_per_pack`, `vat_class`, `tracks_stock`, `tracks_lots`, `tracks_expiry`, `active`, `custom` JSONB |
+| `items` | `type` (`product` \| `service`), `name`, `description`, `manufacturer_id`, `category_id`, `presentation`, `active_ingredient`, `strength`, **`invima_registration`**, `invima_expires_at`, `invima_status` (`valid` \| `in_process` \| `expired` \| `not_applicable`), `requires_prescription`, `controlled`, `cold_chain`, `unit`, `splittable` + `units_per_pack`, `vat_class`, `tracks_stock`, `tracks_lots`, `tracks_expiry`, `active`, **`regulated_max_price` nullable**, `cap_status`, `custom` JSONB. **The cap lives on the item, not on a price row** — it is a regulatory property of the product set by the CNPMDM, and putting it on `item_prices` would mean every new price row had to carry the previous one's cap forward, with the guardrail failing silently on exactly the reference somebody just repriced (§11.4, A11) |
 | `item_barcodes` | `item_id`, `code`, `is_primary`. A product routinely carries several — the manufacturer's EAN, the distributor's, and one the droguería printed itself |
 | `manufacturers` | `name`, `nit`. The **laboratorio** |
 | `categories` | `name`, `parent_id`. Flat enough to filter, nested enough to roll up |
 | `suppliers` | `nit`, `name`, `contact`, `payment_terms`, `lead_time_days`. Coopidrogas in the handoff data |
 | `supplier_items` | `supplier_id`, `item_id`, `supplier_code`, `cost`, `min_order_pack` |
-| `item_prices` | `item_id`, `location_id` nullable (null = network-wide), `price`, `effective_from`, `effective_to`, `regulated_max_price` nullable, `source` (`manual` \| `imported` \| `model`) |
+| `item_prices` | `item_id`, `location_id` nullable (null = network-wide), `price`, `effective_from`, `effective_to`, `source` (`manual` \| `imported`), `proposal_id` nullable, `set_by_user_id`. **There is no `model` source** — no model writes a price (A11) |
 | `customers` | `document_type`, `document`, `name`, `phone`, `email`, `address`, `data_consent`, `notes` |
 | `imports` | one row per run of a load tool |
 
@@ -189,7 +189,7 @@ One table, because Botica hands a sale over and records what happened to it (§8
 | `goods_receipts` + `goods_receipt_lines` | receiving against an order; creates `lots` and stock moves |
 | `demand_forecasts` | `item_id`, `location_id`, `weekly_sales`, `trend`, `coverage_days`, `reorder_point`, `safety_stock`, `computed_at`, `model_version` |
 | `elasticity_estimates` | `item_id`, `location_id` nullable, `elasticity`, `r2`, `window`, `observations`, `computed_at`, `model_version` |
-| `price_proposals` | `item_id`, `current_price`, `proposed_price`, `current_margin`, `projected_margin`, `estimated_monthly_impact`, `status`, `respects_regulated_cap`, `approved_by` |
+| `price_proposals` | `item_id`, `current_price`, `suggested_price`, `current_margin`, `projected_margin`, `estimated_monthly_impact`, `status` (`proposed` \| `above_cap` \| `taken` \| `modified` \| `dismissed` \| `superseded`), `respects_regulated_cap`, `resolved_by`, `resolved_price`. An analysis, never an instruction (A11) |
 
 `purchase_order_lines.suggested_quantity` and `approved_quantity` are two columns on purpose. The handoff's Compras screen lets the administrator edit the model's number, and the difference between the two is the only honest measure of whether the model is trusted. Overwriting the suggestion destroys that measurement permanently.
 
@@ -423,7 +423,7 @@ Open questions, and the stage each one blocks. None of them block S0, S1 or S2.
 | **11.1** | **Which system each client invoices with, and what its API expects** — one mapping per target | **S5**, per client | Not a blocker. S5 builds the canonical document and the delivery regardless, and the first mapping is written against the first client's system. What must not happen is anyone promising DIAN transmission, which Botica does not do (§8) |
 | **11.2** | **What the legacy system can export** — catalog, stock, lots, suppliers, and above all sales history | **S6** and **S7** quality, **S1**'s load tool mapping | **Not a blocker** (§1, *Cold start*). Every model runs parametric on day one and the demo seed fills every screen, so the product is demonstrable and pilotable with no export at all. What the export changes is how fast the forecast becomes good and how early elasticity appears per item — a quality and timing variable, not a gate. Worth chasing early because it is free accuracy; not worth blocking a pilot for |
 | **11.3** | **May customer symptom text reach a model provider at all**, and what is retained | **S8** | Health data about an identifiable person under Ley 1581. A "no" costs no code — the assistant runs in `modo local` — but it changes what is demonstrated and what is sold |
-| **11.4** | **Regulated maximum prices** (CNPMDM circulars): is a maintained source of price caps available, and does the pilot sell products under control | **S7** | `item_prices.regulated_max_price` exists in the schema either way. Whether a proposal engine may raise a price without a cap to check against is a legal question, not a modelling one |
+| **11.4** | **Regulated maximum prices** (CNPMDM circulars): is a maintained source of price caps available, and does the pilot sell products under control | **S7** | `items.regulated_max_price` exists either way, and it now matters more than it did: A11 stops the model writing prices, but a person acting on a margin-rule suggestion can still raise one on day one, and an unknown cap is the only thing between that and a regulated breach. A null cap means *unknown*, never *uncapped*. |
 | **11.5** | **The pilot**: which network, how many sedes, how many tills per sede, what the connectivity is actually like, and what browser is on those machines | **S2**, **S4** | Every budget in §4 is measured on that hardware. "Works on the developer's Mac" is not a result |
 | **11.6** | **Which sede goes first**, and who at the client owns the data cleanup | all | The deck's own rollout is demo → history load → one sede → the network. The catalog cleanup is the client's work and is usually the schedule risk |
 
@@ -470,7 +470,7 @@ Eleven stages. [`stages/README.md`](./stages/README.md) is the index and holds t
 | **S4 — Counter** | the till: ticket, keyboard and scanner path, turnos and cash close, payments, returns, offline selling end to end | S3 |
 | **S5 — Handoff** | the canonical sale document, the delivery queue with exactly-once retry, per-target mappings, the file export, and the work list for failed deliveries | S4 |
 | **S6 — Purchasing** | the sales-history loader, demand forecast per item per sede, the suggested order, approval and dispatch, receiving against an order, the Orden sugerida screen | S4 |
-| **S7 — Pricing** | elasticity estimation, price proposals with margin impact, regulated caps, and application through the price table | S4 |
+| **S7 — Pricing** | elasticity estimation, the pricing analytics surface, suggested prices with margin impact, regulated caps. It writes no price (A11) | S4 |
 | **S8 — Assistant** | symptom extraction, recommendation, stock-bounded suggestions, safety filtering, the local fallback, acceptance metrics | S4 |
 | **S9 — Dashboard** | `daily_metrics` rollups, the Panel screen, per-location comparison, scheduled reports and exports | S5, S6, S7, S8 |
 | **S10 — Operations** | compliance checklist and document vault, tenant and sede provisioning, backups and restore drill, observability, the operator runbook | S9 |
@@ -485,7 +485,7 @@ Every stage contributes to the demo seed described in §1, and a stage is not fi
 
 ## 14. Amendments
 
-Decisions taken in writing this document that extend rather than restate the ELOS inheritance. Stage documents cite them as `A1`–`A10`. If one is rejected, the owning stage changes and this list is the diff to apply.
+Decisions taken in writing this document that extend rather than restate the ELOS inheritance. Stage documents cite them as `A1`–`A11`. If one is rejected, the owning stage changes and this list is the diff to apply.
 
 | | Decision | Owner |
 |---|---|---|
@@ -499,3 +499,4 @@ Decisions taken in writing this document that extend rather than restate the ELO
 | **A8** | **The assistant degrades to `modo local`.** Cross-sell rules and safety warnings are synced to the till, so suggestions and filtering survive a blackout; only the language model's recommendation needs the network. The advisory notice ships inside the component, not as configurable content | S8 |
 | **A9** | **Botica never transmits to the DIAN itself.** The client's existing system issues the fiscal document; Botica hands it a complete, canonical sale over that system's API, exactly once, and records whatever comes back. A proveedor tecnológico is one possible target among others, not a special case in the design | S5 |
 | **A10** | **Distributor readiness is extension points, not a module.** `locations.type` admits `distribution_center`, transfers and purchase orders are already documents between locations, and price lists are already scoped. No distributor feature ships in v1 | S0 · S1 · S3 |
+| **A11** | **The pricing model never writes a price.** Elasticity and the margin rule produce an *analysis* — what a reference earns today, what the data says about its price sensitivity, and a suggested price with the confidence behind it. A price changes only when a person changes it, in the catalog's own price editor, and the row that results is `manual` and carries their name. There is no `model` price source, no scheduled repricing, no bulk apply, and no path by which a model's number reaches a till without a human having typed or confirmed it. `item_prices.proposal_id` records which suggestion informed the change, and `price_proposals.resolved_price` records what the person actually chose — because the gap between the suggestion and the decision is the only honest measure of whether the model is worth trusting, and it is the same measurement `purchase_order_lines.suggested_quantity` and `sale_lines.from_suggestion` exist to preserve | S1 · S7 |

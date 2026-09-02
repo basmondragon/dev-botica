@@ -83,7 +83,7 @@ S5, S6, S7 and S8 are independent of each other and all four fan out from **S4**
 | [S4 — Counter](./S4-counter.md)           | the till: ticket, keyboard and scanner path, turnos and cash close, payments, returns, offline selling end to end                                                     | S3         |
 | [S5 — Handoff](./S5-handoff.md)       | the canonical sale document, the delivery queue with exactly-once retry, per-target mappings, the file export, and the failed-delivery work list                                                                    | S4         |
 | [S6 — Purchasing](./S6-purchasing.md)               | the sales-history loader, demand forecast, the suggested order, approval and dispatch, receiving                                                                      | S4         |
-| [S7 — Pricing](./S7-pricing.md)               | elasticity estimation, price proposals with margin impact, regulated caps, application                                                                                | S4         |
+| [S7 — Pricing](./S7-pricing.md)               | elasticity estimation, the pricing analytics surface, suggested prices with margin impact, regulated caps. It writes no price (A11) | S4         |
 | [S8 — Assistant](./S8-assistant.md)           | symptom extraction, recommendation, stock-bounded suggestions, safety filtering, the local fallback                                                                   | S4         |
 | [S9 — Dashboard](./S9-dashboard.md)                   | `daily_metrics` rollups, the Panel screen, per-sede comparison, reports and exports                                                                                | S5, S6, S7, S8 |
 | [S10 — Operations](./S10-operations.md)         | compliance checklist and document vault, provisioning, backups and restore drill, observability, the runbook                                                          | S9         |
@@ -109,7 +109,7 @@ Seven surfaces in the shell were never drawn — Precios, Sedes, Reportes, setti
 
 ## Amendments
 
-Ten decisions taken in `architecture.md` §14 that extend the ELOS inheritance rather than restate it. Stage documents build to them and cite them as `A1`–`A10`. If any is rejected, the owning stage changes and this list is the diff to apply.
+Eleven decisions taken in `architecture.md` §14 that extend the ELOS inheritance rather than restate it. Stage documents build to them and cite them as `A1`–`A11`. If any is rejected, the owning stage changes and this list is the diff to apply.
 
 |         | Decision                                                                                                                                                                            | Owner        |
 | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
@@ -123,6 +123,7 @@ Ten decisions taken in `architecture.md` §14 that extend the ELOS inheritance r
 | **A8**  | The assistant degrades to **modo local** on synced rules. The advisory notice ships inside the component, not as configurable content                                                 | S8           |
 | **A9**  | **Botica never transmits to the DIAN itself.** The client's existing invoicing system issues the fiscal document; Botica hands it a complete, canonical sale over that system's API, exactly once, and records whatever comes back. A proveedor tecnológico is one possible target among others, not a special case in the design | S5           |
 | **A10** | Distributor readiness is extension points, not a module                                                                                                                             | S0 · S1 · S3 |
+| **A11** | **The pricing model never writes a price.** Elasticity and the margin rule produce an analysis and a suggested price; a person changes the price in the catalog's price editor and the row is `manual` with their name on it. No `model` source, no scheduled repricing, no bulk apply. `item_prices.proposal_id` and `price_proposals.resolved_price` preserve the measurement | S1 · S7 |
 
 ---
 

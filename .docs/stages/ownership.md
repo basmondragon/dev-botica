@@ -67,7 +67,7 @@ One owner per thing. This document exists because eleven stage documents are wri
 | `categories` | **S1** | S1 | |
 | `suppliers` | **S1** | S1, S6 | S6 writes `lead_time_days` back from observed receiving lead time |
 | `supplier_items` | **S1** | S1, S6 | S6 updates `cost` from what a receipt actually cost |
-| `item_prices` | **S1** | S1, S7 | S1 writes `manual` and `imported` sources; **S7 writes every `model` row and `regulated_max_price`** |
+| `item_prices` | **S1** | S1, S7 | **S1 writes every price.** S7 writes `regulated_max_price` and nothing else — a cap is a constraint, not a price (A11). There is no `model` source: a model's number reaches this table only by a person typing or confirming it, and the row is then `manual` and carries their name |
 | `customers` | **S1** | S1, S4 | S1 creates and loads; **S4 is the only interactive writer** — a customer is created at the counter, and **offline**, which rule 8's second paragraph makes safe. S2 carries that write but does not author it |
 | `imports` | **S1** | S1, S6 | S1's master-data loader and S6's sales-history loader both record runs here |
 | `devices` | **S2** | S2 | S2 alone. With numbering leases deferred (A6) no other stage reads or writes this table |
@@ -90,7 +90,7 @@ One owner per thing. This document exists because eleven stage documents are wri
 | `goods_receipts` · `goods_receipt_lines` | **S6** | S6 | receiving creates `lots` and calls S3's ledger service — it does not write `stock_moves` itself (rule 7) |
 | `demand_forecasts` | **S6** | S6 | read by S3's screen and S9's tiles |
 | `elasticity_estimates` | **S7** | S7 | |
-| `price_proposals` | **S7** | S7 | applying one writes an `item_prices` row with `source = model` |
+| `price_proposals` | **S7** | S7, S1 | S7 computes and supersedes them; **S1 resolves one** when a person acts on it in the price editor, stamping `taken`, `modified` or `dismissed` with `resolved_by` and `resolved_price`. Acting on a suggestion is a write to `item_prices`, and that write is S1's (A11) |
 | `assistant_queries` | **S8** | S8 | |
 | `assistant_suggestions` | **S8** | S8 | `accepted` and `sale_line_id` are written when the cashier presses `Agregar` |
 | `cross_sell_rules` | **S8** | S8 | mined from the tenant's own sales; synced to the till (A8) |
@@ -109,13 +109,14 @@ One owner per thing. This document exists because eleven stage documents are wri
 | `item_type` | S1 | `product`, `service` (A7) |
 | `vat_class` | S1 | `excluded`, `exempt`, `rate_5`, `rate_19` |
 | `invima_status` | S1 | `valid`, `in_process`, `expired`, `not_applicable` |
-| `price_source` | S1 | `manual`, `imported`, `model` — S1 writes the first two, S7 the third |
+| `price_source` | S1 | `manual`, `imported`. **No `model` value exists** (A11): a model never writes a price, so there is no source to record it under. A price a person set after reading a suggestion is `manual` and carries `proposal_id` |
 | `stock_move_type` | S3 | **S3 creates the full enum; the causing stage is fixed per value below** |
 | `sync_conflict_type` | S2 | **S2 declares every value at creation**, including `negative_stock` (written by S3) and `stale_price` and `catalog_divergence` (written by S4). No later stage runs `ALTER TYPE` — a value added by the stage that writes it is a migration that must land before the stage that reads it, which is a coordination bug waiting for a clean build |
 | `sale_status` | S4 | `open`, `closed`, `voided` |
 | `sale_source` | S4 | `counter`, `imported` — S4 writes the first, S6 the second |
 | `fiscal_document_status` | S5 | `pending`, `sent`, `acknowledged`, `failed`. Not DIAN states — these describe **our handoff**, not the receiving system's filing (§8) |
 | `purchase_order_status` | S6 | `suggested`, `approved`, `sent`, `partially_received`, `received`, `discarded` |
+| `price_proposal_status` | S7 | `proposed`, `above_cap`, `taken`, `modified`, `dismissed`, `superseded`. **S7 creates the enum and writes the first two and the last; S1 writes `taken`, `modified` and `dismissed`** when a person acts in the price editor (A11). The sharpest cross-stage case in the register: the stage that computes a suggestion is not the stage that records what became of it, and that separation is the whole point |
 | `suggestion_type` | S8 | `first_choice`, `conditional`, `bought_together` — rendered as `Primera opción`, `Con condición`, `Se lleva junto` |
 
 ### `stock_moves.type` — every value, and who causes it
@@ -148,7 +149,8 @@ Every one of these was claimable by more than one stage, or by none.
 | `items.tracks_stock` | **S1** | S1 | The switch that makes a service a service (A7). S3 reads it to decide whether a sale moves stock; S4 reads it to decide whether a line needs a lot. Neither writes it |
 | `items.invima_registration`, `invima_expires_at`, `invima_status` | **S1** | S1 | The **registro INVIMA**, an explicit product requirement and not a custom field (§3). S3's grid filters on it, S10's checklist reads its expiry, neither writes it. Nothing validates it against INVIMA's register (§12) |
 | `items.custom` | **S1** | S1, S6, S7 | JSONB for what a specific droguería tracks and the model does not. S6 and S7 read it as model features and may write derived bands, each under its own key |
-| `item_prices.regulated_max_price` | **S1** | **S7** | Created empty by the table's owner. Only S7 populates a cap, and only S7 checks a proposal against one (§11.4). A null cap means *unknown*, never *uncapped* — S7 says which |
+| `item_prices.proposal_id`, `set_by_user_id` | **S1** | S1 | Created and written by the table's owner. `proposal_id` is nullable and names the suggestion a person acted on, which is what lets S7 measure whether its own output is trusted without ever writing a price itself (A11). `set_by_user_id` answers the question every price dispute starts with |
+| `items.regulated_max_price`, `cap_status` | **S1** | **S7** | Created empty by the table's owner. Only S7 populates a cap, and only S7 checks a proposal against one (§11.4). A null cap means *unknown*, never *uncapped* — S7 says which |
 | `stock_policies.reorder_point` | **S3** | S3, S6 | The `Punto de reorden` state on the Existencias screen must work at S3, three stages before a forecast exists. S3 writes a manual threshold; S6 overwrites with the model's and sets `source = model`. `source` is what stops S6 silently erasing a threshold a pharmacist set on purpose |
 | `lots.unit_cost` | **S3** | S3, S6 | S3 creates lots for opening stock and adjustments; S6 writes the cost a goods receipt actually paid |
 | `sale_lines.unit_cost` | **S4** | S4 | Stamped from the lot at the moment of sale. Margin computed later by joining to a lot's *current* cost is wrong the first time a cost changes, and every margin figure on the Panel depends on this being stamped rather than derived |
