@@ -65,7 +65,19 @@ Each model therefore runs in one of three regimes, and **always says which one i
 
 **A model with no basis withholds rather than guesses**, and the two cases differ in kind. A demand forecast degrades gracefully: with no history it falls back to the sede's own reorder points, which a pharmacist set deliberately and which are better than a guess. An elasticity does not degrade at all — a price that has never moved yields no estimate of what happens when it moves, and inventing one would be the single most damaging thing this product could do to a customer's margin. So S7 ships **two engines**: a margin rule that needs no history and works on day one, and elasticity that appears per item as that item earns it. The Precios screen is useful immediately and honest immediately, which is a better outcome than a screen that waits ninety days to say anything.
 
-**The demo seed.** One command builds a tenant that looks like the handoff — Droguerías La 45, its six sedes, a catalog with lots and expiry dates, stock, and enough synthetic sales for every screen to render as drawn. Each stage contributes the fixtures for its own tables, and **a stage is not finished until its screens render convincingly from the seed**, which is a sharper completion test than a passing test suite: it catches the empty state nobody designed and the tile whose denominator is zero. The seed is synthetic and self-evidently so; it is never a template for a real tenant, and it is never loaded into one.
+**The demo seed.** One command, **owned by S0** because S0 creates the first seedable tables and its own verification needs a tenant to run against, builds a tenant that looks like the handoff — Droguerías La 45, its six sedes, a catalog with lots and expiry dates, stock, and enough synthetic sales for every screen to render as drawn. Each stage contributes the fixtures for its own tables, and **a stage is not finished until its screens render convincingly from the seed**, which is a sharper completion test than a passing test suite: it catches the empty state nobody designed and the tile whose denominator is zero. The seed is synthetic and self-evidently so; it is never a template for a real tenant, and it is never loaded into one.
+
+**The seed has named profiles, and they are part of the contract.** Several stages need to verify behaviour a full, healthy tenant cannot show — a comparator that withholds because there is no previous period, an engine that has no sales to fit, a screen at a scale the pilot has not reached. Those states are reached by a **declared profile**, never by hand-editing a database, because a check that begins "first, delete some rows" is a check nobody runs twice. The set is fixed here and S0's command implements it; each stage's fixture responds to the profile it is given.
+
+| Profile | What it builds | Who needs it |
+|---|---|---|
+| `default` | Droguerías La 45 — six sedes, 180 days of sales, Usme deliberately cold | every stage |
+| `young` | the same network with twelve days of history | S9's withheld comparators, the states most likely met on a real first day |
+| `cold` | catalog, stock and no sales at all | S6's parametric order, S7's sales-free path, S8's empty rule set |
+| `scale` | twenty locations, enough rows to measure against | S9's and S10's budget checks, which cannot be made on six |
+| `minimal` | one network, one sede, one owner | S0's isolation checks, which need a second tenant to be isolated *from* |
+
+**A check asserts against the seed's own counts, never against production sizing.** The registry figures in S2 and the row counts in S3 are what a real pilot will hold; the seed holds what its fixtures build. A check that expects nine thousand customers because the sizing table says so will fail on every run, and the fix is to assert against the seed's numbers or against what the product itself reports.
 
 ---
 
