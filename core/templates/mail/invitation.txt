@@ -1,0 +1,11 @@
+{{ tenant_name }}
+
+{% if invited_by %}{{ invited_by }} le invitó a Botica{% else %}Le invitaron a Botica{% endif %} como {{ role_label }}{% if location_name %} en la sede {{ location_name }}{% endif %}.
+
+Abra este enlace para crear su contraseña y entrar:
+
+{{ accept_url }}
+
+El enlace vence el {{ expires_at|date:"d/m/Y" }}. Si ya venció, pida uno nuevo a la administradora de su droguería.
+
+El acceso a Botica es por invitación. Nadie puede crear una cuenta por su cuenta.

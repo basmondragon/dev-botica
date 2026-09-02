@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+/*
+  The token layer. Every value below is transcribed from design-system.md
+  Part A -- what the handoff drew -- plus §B.15's complete delta: two derived
+  colour values, one type step and four counter-density heights.
+
+  There is no dark theme. architecture.md §12 lists it under deliberately not
+  building; do not scaffold a `dark:` variant.
+*/
+
+/* The two self-hosted faces. A shell that paints in a fallback face when the
+   link is dead is a shell whose fixed-percentage table columns drift, and
+   every width in §A.17 is measured in Geist. */
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist-variable.woff2") format("woff2-variations");
+  font-weight: 300 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/geist-mono-variable.woff2") format("woff2-variations");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* §B.1 · the closed type scale — eight steps and nothing else. */
+  --text-*: initial;
+  --text-36: 36px;
+  --text-36--line-height: 40px;
+  --text-28: 28px;
+  --text-28--line-height: 32px;
+  --text-20: 20px;
+  --text-20--line-height: 26px;
+  --text-16: 16px;
+  --text-16--line-height: 24px;
+  --text-14: 14px;
+  --text-14--line-height: 20px;
+  --text-12: 12px;
+  --text-12--line-height: 18px;
+  --text-11: 11px;
+  --text-11--line-height: 16px;
+  --text-10: 10px;
+  --text-10--line-height: 14px;
+
+  /* §A.3 · neutrals. Two greys are two greys: #727272 is a label beside its
+     value, #6b6b6b is an annotation under it — and, per §B.15, the value
+     tertiary text steps to on the #f4f4f4 chrome plane. */
+  --color-canvas: #fbfbfb;
+  --color-surface: #ffffff;
+  --color-chrome: #f4f4f4;
+  --color-active: #e8e8e8;
+  --color-ink: #171717;
+  --color-ink-body: #555555;
+  --color-ink-label: #727272;
+  --color-ink-note: #6b6b6b;
+  --color-ink-soft: #909090;
+  --color-ink-disabled: #c8c8c8;
+  --color-nav-veil: rgba(251, 251, 251, 0.85);
+
+  /* §A.4 · borders. All four are alpha-black, never an opaque grey, so they
+     tint whatever plane they sit on. */
+  --color-hairline: rgba(0, 0, 0, 0.06);
+  --color-edge-soft: rgba(0, 0, 0, 0.08);
+  --color-edge: rgba(0, 0, 0, 0.11);
+  --color-edge-strong: rgba(0, 0, 0, 0.16);
+
+  /* §A.5 · the blue ramp. Blue is the quantity colour: a deeper blue is a
+     larger number, and it never marks a state, a category or a sede. */
+  --color-data-100: #0071e3;
+  --color-data-90: #1a7fe5;
+  --color-data-80: #2683e5;
+  --color-data-70: #3389e6;
+  --color-data-60: #4c9bea;
+  --color-data-50: #5fa8ed;
+  --color-data-40: #6cb0ef;
+  --color-data-30: #7fb9f0;
+  --color-data-20: #87bff1;
+  --color-data-10: #9ec9f4;
+  --color-data-track: #e0eefc;
+  --color-brand: #0071e3;
+
+  /* §A.6 + §B.7.1 · five semantic families. Neutral adds no new colour: it is
+     --ink-label on --active, both already in the system. The tints are the
+     drawn values — where a 14%-over-canvas derivation and the drawing differ,
+     the drawing wins, which is why warning is #ece7df and not #ebe7df. */
+  --color-neutral: #727272;
+  --color-tint-neutral: #e8e8e8;
+  --color-positive: #4e7a52;
+  --color-tint-positive: #e3e9e3;
+  --color-warning: #8c6a33;
+  --color-tint-warning: #ece7df;
+  --color-info: #4c6a86;
+  --color-tint-info: #e3e7eb;
+  --color-critical: #b04a3f;
+  --color-tint-critical: #f1e2e1;
+
+  /* §B.15 · the two colour values Part B adds, both derived alphas on bases
+     the system already carries. */
+  --color-scrim: rgba(0, 0, 0, 0.32);
+  --color-edge-critical: rgba(176, 74, 63, 0.32);
+
+  /* §A.21 · the interaction values the handoff states. */
+  --color-hover-row: #f4f4f4;
+  --color-hover-nav: rgba(0, 0, 0, 0.04);
+  --color-hover-primary: #000000;
+  --color-hover-secondary: rgba(0, 0, 0, 0.28);
+
+  /* §A.7 · three shadows, all on a 20,20,20 base at 2%, 4% and 8%. Nothing
+     blooms in from `none`: the plane's shadow exists at rest. */
+  --shadow-plane: 0 1px 2px rgba(20, 20, 20, 0.02);
+  --shadow-segment: 0 1px 2px rgba(20, 20, 20, 0.04);
+  --shadow-overlay:
+    0 1px 2px rgba(20, 20, 20, 0.04), 0 18px 44px rgba(20, 20, 20, 0.08);
+
+  /* §A.8 · seven radii, and they nest correctly. `--radius-control` is 9px
+     and is the workhorse. */
+  --radius-*: initial;
+  --radius-mark: 4px;
+  --radius-check: 4px;
+  --radius-icon: 6px;
+  --radius-segment: 7px;
+  --radius-control: 9px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-pill: 999px;
+
+  /* §B.15 · counter density. Four heights, all on the §A.9 2/4 scale. */
+  --spacing-control-counter: 44px;
+  --spacing-primary-counter: 52px;
+  --spacing-row-counter: 56px;
+  --spacing-panel-counter: 420px;
+
+  /* §A.2 · two tracking values and no third. */
+  --tracking-eyebrow: 0.18em;
+  --tracking-display: -0.025em;
+
+  /* §B.14 · 120–160ms ease-out, 140ms by default. */
+  --default-transition-duration: 140ms;
+  --default-transition-timing-function: ease-out;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-edge);
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+  }
+
+  /* §A.2 · tabular numerals are not optional. This is the default for anything
+     numeric and it has no exceptions. */
+  table,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a[href] {
+    cursor: pointer;
+  }
+
+  /*
+    §B.5.1 · the focus ring. ONE definition, no exceptions: no destructive
+    variant, no per-surface variant, no ring inside a dialog that differs from
+    the ring outside it. `:focus-visible` only — a `focus:outline-none` with no
+    replacement is a defect, not a style choice.
+  */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .surface-scroll {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .surface-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+/*
+  §B.10.1 · the skeleton pulse. It is the only animation in the system besides
+  the 140ms colour transitions: §B.14 forbids entrance animations, and nothing
+  translates.
+*/
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@utility skeleton {
+  background-color: var(--color-chrome);
+  border-radius: var(--radius-control);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skeleton {
+    animation: none !important;
+    background-color: var(--color-chrome) !important;
+  }
+}

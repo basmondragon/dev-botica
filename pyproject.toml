@@ -1,0 +1,64 @@
+[project]
+name = "botica"
+version = "0.1.0"
+description = "Botica — the operating platform for Colombian droguerías"
+requires-python = ">=3.13"
+dependencies = [
+    "Django==6.1",
+    # architecture.md §9 names django-ninja 1.5.x; every 1.5 release caps at
+    # Django <6.1, so the pin that satisfies "Django 6.1 + django-ninja 1.x"
+    # is the 1.7 line. The stack decision is Django 6.1; this is its cost.
+    "django-ninja==1.7.0",
+    "django-allauth==65.19.0",
+    "procrastinate[django]==3.9.0",
+    "psycopg[binary,pool]==3.3.4",
+    "gunicorn==23.0.0",
+    "whitenoise==6.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.4.2",
+    "pytest-django==4.11.1",
+    "mypy==1.19.1",
+    "django-stubs[compatible-mypy]==6.1.0",
+    "ruff==0.16.5",
+]
+
+[tool.setuptools]
+packages = [
+    "botica",
+    "core",
+    "core.demo",
+    "core.management",
+    "core.management.commands",
+    "core.migrations",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "botica.settings"
+python_files = "test_*.py"
+testpaths = ["core/tests"]
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main"]
+check_untyped_defs = true
+exclude = ['^core/migrations/', '^core/tests/']
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.format]
+exclude = ["core/migrations/*.py"]
+indent-style = "space"
+line-ending = "lf"
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.django-stubs]
+django_settings_module = "botica.settings"

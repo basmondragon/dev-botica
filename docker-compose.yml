@@ -1,0 +1,98 @@
+name: botica
+
+# Four services, one Postgres, no Redis and no pgbouncer (architecture §4, §9).
+# `web` and `worker` are the same image started with different commands.
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-botica}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD}
+      BOTICA_MIGRATION_USER: ${BOTICA_MIGRATION_USER:-botica_migrator}
+      BOTICA_MIGRATION_PASSWORD: ${BOTICA_MIGRATION_PASSWORD:?set BOTICA_MIGRATION_PASSWORD}
+      BOTICA_RUNTIME_USER: ${BOTICA_RUNTIME_USER:-botica_app}
+      BOTICA_RUNTIME_PASSWORD: ${BOTICA_RUNTIME_PASSWORD:?set BOTICA_RUNTIME_PASSWORD}
+    ports:
+      - "127.0.0.1:${BOTICA_DB_PORT:-5434}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-botica}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      args:
+        BOTICA_VERSION: ${BOTICA_VERSION:-}
+    image: botica:latest
+    restart: unless-stopped
+    command: web
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Host ports are configurable so a second stack can share a machine;
+      # the container ports never move.
+      - "127.0.0.1:${BOTICA_WEB_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  worker:
+    image: botica:latest
+    restart: unless-stopped
+    command: worker
+    env_file: .env
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ["CMD-SHELL", "python manage.py procrastinate healthchecks > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      BOTICA_DOMAIN: ${BOTICA_DOMAIN:-localhost}
+    ports:
+      - "${BOTICA_HTTP_PORT:-80}:80"
+      - "${BOTICA_HTTPS_PORT:-443}:443"
+      - "${BOTICA_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:
+  caddydata:
+  caddyconfig:

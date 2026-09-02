@@ -1,0 +1,16 @@
+{$BOTICA_DOMAIN} {
+	encode zstd gzip
+
+	# Django admin is the platform-admin surface and is never served over the
+	# public address. It is reached from the host the stack runs on.
+	@console path /admin /admin/* /static/admin /static/admin/*
+	handle @console {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy web:8000 {
+			header_up X-Botica-Edge public
+		}
+	}
+}

@@ -1,0 +1,1491 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Botica",
+    "version": "1",
+    "description": "La plataforma operativa para droguerías colombianas."
+  },
+  "paths": {
+    "/api/me": {
+      "get": {
+        "operationId": "core_api_me",
+        "summary": "Me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The acting identity.\n\nA `platform_admin`'s identity comes from the session rather than from a read\nunder the pin -- their `users` row carries a null `tenant_id` and belongs to\nno network, so reading it under the pin would 404 them on their own identity\nthe instant they selected a tenant.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/nav-counters": {
+      "get": {
+        "operationId": "core_api_nav_counters",
+        "summary": "Nav Counters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NavCountersOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Empty at S0. S4 fills `counter` and S6 fills `purchasing`; a stage adds\nits key here rather than fetching its own count.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/locations": {
+      "get": {
+        "operationId": "core_api_list_locations",
+        "summary": "List Locations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LocationOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "The network's **sedes**. Read by the shell, by the scoping filter every\nlater grid carries, and by the roster's sede select.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitations": {
+      "get": {
+        "operationId": "core_api_list_invitations",
+        "summary": "List Invitations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InvitationOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Outstanding and recently resolved invitations for the pinned tenant.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_api_create_invitation",
+        "summary": "Create Invitation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invite an address at a role, with a `location_id` when the role is\n`cashier`. An `admin` may invite at `cashier` only.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvitationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitations/preview": {
+      "post": {
+        "operationId": "core_api_preview_invitation",
+        "summary": "Preview Invitation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What a token names, so the accept screen can render before a password\nexists. A POST for what is logically a read, because the lookup key is a\ncredential and a path segment is written into every access log.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "PublicAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitations/accept": {
+      "post": {
+        "operationId": "core_api_accept_invitation",
+        "summary": "Accept Invitation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Consume the invitation and create the `users` row (architecture §3).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "PublicAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitations/{invitation_id}/resend": {
+      "post": {
+        "operationId": "core_api_resend_invitation",
+        "summary": "Resend Invitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Re-send the same token. It does not rotate it -- a link already sent by\nanother channel keeps working.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitations/{invitation_id}/link": {
+      "post": {
+        "operationId": "core_api_invitation_link",
+        "summary": "Invitation Link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationLinkOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "`Copiar enlace`. Five failed deliveries are a channel failure and not an\ninvalid invitation, so an owner sends the link over WhatsApp instead.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/invitations/{invitation_id}": {
+      "delete": {
+        "operationId": "core_api_revoke_invitation",
+        "summary": "Revoke Invitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Revoke an outstanding invitation. The row stays, at `revoked`.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "core_api_list_users",
+        "summary": "List Users",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_UserOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The roster. The second endpoint on the grid contract.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/users/{user_id}": {
+      "patch": {
+        "operationId": "core_api_patch_user",
+        "summary": "Patch User",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change status, home sede, or role. **Role change is `owner` only** (§2).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_api_delete_user",
+        "summary": "Delete User",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Hard delete. \"Delete\" means hard delete (§2).\n\nEvery stage referencing `users` does so `ON DELETE SET NULL` and stamps the\nhuman-readable identity it needs at write time -- `audit_log.actor_email` is\nS0's instance of the pattern.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/tenant": {
+      "get": {
+        "operationId": "core_api_read_tenant_settings",
+        "summary": "Read Tenant Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_api_write_tenant_settings",
+        "summary": "Write Tenant Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Edit the network's identity. No tenant id appears in the path: the tenant\nis pinned per request, so the write always targets the current one.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/audit-log": {
+      "get": {
+        "operationId": "core_api_read_audit_log",
+        "summary": "Read Audit Log",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "entity_type",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Entity Type"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AuditRowOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The append-only mutation trail, server-paginated. The grid contract's\nfirst real consumer. S10's provisioning and impersonation entries land in the\nsame table and read out here; S10 does not re-expose this endpoint.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MeOut": {
+        "description": "What the shell gates its nav on (§2, §B.8.3).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "platform_admin": {
+            "title": "Platform Admin",
+            "type": "boolean"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TenantOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "readable_location_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Readable Location Ids",
+            "type": "array"
+          },
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "admin_console": {
+            "title": "Admin Console",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "platform_admin",
+          "tenant",
+          "location_id",
+          "location_name",
+          "readable_location_ids",
+          "app_version",
+          "admin_console"
+        ],
+        "title": "MeOut",
+        "type": "object"
+      },
+      "TenantOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "suspended"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "status"
+        ],
+        "title": "TenantOut",
+        "type": "object"
+      },
+      "NavCountersOut": {
+        "description": "The work-waiting count per nav item, as a map of route key to count and\nseverity (§B.8.2). Coined, and it exists so that seven stages do not each\ninvent their own counter fetch. Empty at S0 -- and zero renders nothing.",
+        "properties": {
+          "counters": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counters",
+            "type": "object"
+          },
+          "critical": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Critical",
+            "type": "array"
+          }
+        },
+        "required": [
+          "counters",
+          "critical"
+        ],
+        "title": "NavCountersOut",
+        "type": "object"
+      },
+      "LocationOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "store",
+              "warehouse",
+              "distribution_center"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "city": {
+            "title": "City",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "type",
+          "city",
+          "status"
+        ],
+        "title": "LocationOut",
+        "type": "object"
+      },
+      "InvitationOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired",
+              "delivery_failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "invited_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invited By Name"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "location_id",
+          "location_name",
+          "status",
+          "state",
+          "expires_at",
+          "invited_by_name",
+          "created_at"
+        ],
+        "title": "InvitationOut",
+        "type": "object"
+      },
+      "InvitationIn": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "InvitationIn",
+        "type": "object"
+      },
+      "InvitationPreviewOut": {
+        "properties": {
+          "tenant_name": {
+            "title": "Tenant Name",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_name",
+          "email",
+          "role",
+          "location_name",
+          "expires_at"
+        ],
+        "title": "InvitationPreviewOut",
+        "type": "object"
+      },
+      "TokenIn": {
+        "description": "The token travels in a request body or a URL fragment. Never in a path.",
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "TokenIn",
+        "type": "object"
+      },
+      "AcceptOut": {
+        "properties": {
+          "landing": {
+            "title": "Landing",
+            "type": "string"
+          }
+        },
+        "required": [
+          "landing"
+        ],
+        "title": "AcceptOut",
+        "type": "object"
+      },
+      "AcceptIn": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "name",
+          "password"
+        ],
+        "title": "AcceptIn",
+        "type": "object"
+      },
+      "InvitationLinkOut": {
+        "properties": {
+          "accept_url": {
+            "title": "Accept Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accept_url"
+        ],
+        "title": "InvitationLinkOut",
+        "type": "object"
+      },
+      "Page_UserOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[UserOut]",
+        "type": "object"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "platform_admin",
+              "owner",
+              "admin",
+              "cashier"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "suspended"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "location_id",
+          "location_name",
+          "status",
+          "last_login_at"
+        ],
+        "title": "UserOut",
+        "type": "object"
+      },
+      "UserPatchIn": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform_admin",
+                  "owner",
+                  "admin",
+                  "cashier"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "active",
+                  "suspended"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "clear_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Location"
+          }
+        },
+        "title": "UserPatchIn",
+        "type": "object"
+      },
+      "TenantSettingsOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "nit": {
+            "title": "Nit",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "suspended"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "legal_name": {
+            "title": "Legal Name",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "number_format": {
+            "title": "Number Format",
+            "type": "string"
+          },
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "nit",
+          "status",
+          "legal_name",
+          "timezone",
+          "currency",
+          "number_format",
+          "app_version"
+        ],
+        "title": "TenantSettingsOut",
+        "type": "object"
+      },
+      "TenantSettingsIn": {
+        "description": "`slug` and `status` are absent by design: a slug that changes breaks every\nsaved link, and a network able to suspend itself would have no way back.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nit": {
+            "title": "Nit",
+            "type": "string"
+          },
+          "legal_name": {
+            "title": "Legal Name",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "nit",
+          "legal_name",
+          "timezone"
+        ],
+        "title": "TenantSettingsIn",
+        "type": "object"
+      },
+      "AuditRowOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "actor_email": {
+            "title": "Actor Email",
+            "type": "string"
+          },
+          "actor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Name"
+          },
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "actor_email",
+          "actor_name",
+          "action",
+          "entity_type",
+          "entity_id",
+          "before",
+          "after",
+          "request_id"
+        ],
+        "title": "AuditRowOut",
+        "type": "object"
+      },
+      "Page_AuditRowOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AuditRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[AuditRowOut]",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "RoleAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid"
+      },
+      "PublicAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid"
+      }
+    }
+  },
+  "servers": []
+}
