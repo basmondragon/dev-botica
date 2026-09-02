@@ -96,6 +96,7 @@ export function Th({
   sortable,
   sorted,
   onSort,
+  sticky,
   className,
 }: {
   children: ReactNode;
@@ -104,6 +105,9 @@ export function Th({
   sortable?: boolean;
   sorted?: "asc" | "desc" | false;
   onSort?: () => void;
+  /** Pinned left as the frame scrolls sideways, above the body's own sticky
+   *  cells so the two never cross. */
+  sticky?: boolean;
   className?: string;
 }) {
   const label = (
@@ -144,6 +148,7 @@ export function Th({
       }
       className={cn(
         "sticky top-0 z-10 h-10 whitespace-nowrap border-b border-edge bg-chrome",
+        sticky && "left-0 z-20",
         "px-[22px] font-mono text-10 uppercase tracking-eyebrow text-ink-note",
         align === "right" && "text-right",
         className,
@@ -210,11 +215,17 @@ export function Tr({
         "transition-[background-color] duration-140 ease-out",
         ROW_HEIGHT[density],
         onClick && "cursor-pointer",
+        // **The rest fill is opaque, not absent.** A transparent row is
+        // indistinguishable from an L0 one until a column is pinned left --
+        // then `bg-inherit` on the sticky cell inherits *nothing* and the
+        // columns scrolling under it show straight through the product name.
+        // The fill is the frame's own colour, so this changes how every table
+        // looks in exactly no way, and makes the pinned column occlude.
         current || checked
           ? "bg-active"
           : cursor
             ? "bg-hover-row"
-            : "hover:bg-hover-row",
+            : "bg-surface hover:bg-hover-row",
         current
           ? "shadow-[inset_2px_0_0_var(--color-ink)]"
           : cursor
@@ -270,6 +281,9 @@ export interface Column<Row> {
   sortable?: boolean;
   numeric?: boolean;
   truncate?: boolean;
+  /** Pinned left in **both** halves of the table. `className` styles the body
+   *  cell; this is what carries the same promise to the header. */
+  sticky?: boolean;
   className?: string;
   render: (row: Row) => ReactNode;
 }
@@ -361,6 +375,15 @@ export function DataTable<Row>({
                     sortable={column.sortable}
                     sorted={column.key === sort && order ? order : false}
                     onSort={() => onSort?.(column.key)}
+                    // **A sticky column is sticky in both halves or in
+                    // neither.** Pinning only the body cells slides the header
+                    // off the column it labels the moment the frame scrolls
+                    // sideways, which is worse than not pinning at all: the
+                    // reader is left with a pinned column of names under
+                    // somebody else's heading. `Th` supplies its own opaque L0
+                    // fill and its own z-order, so the flag is what travels
+                    // rather than the class.
+                    sticky={column.sticky}
                   >
                     {column.label}
                   </Th>

@@ -36,6 +36,13 @@ ALLOWED_DETAIL_KEYS = frozenset(
         "item_id",
         "lot_id",
         "sale_id",
+        # S3's negative-stock rows: the resulting quantity, the documents that
+        # crossed zero, and the `(location, item, lot)` marker the ledger finds
+        # a standing row by. None of the three is a person's data, which is the
+        # rule this list exists to keep.
+        "quantity",
+        "documents",
+        "key",
     }
 )
 
@@ -67,12 +74,13 @@ def scrub(detail):
 
 def raise_conflict(
     *,
-    device,
+    device=None,
     type,
     collection="",
     client_uuid=None,
     occurred_at=None,
     detail=None,
+    tenant_id=None,
     location_id=None,
     row_id=None,
 ):
@@ -81,11 +89,23 @@ def raise_conflict(
     `row_id` is for a caller whose row has an idempotency key of its own -- the
     daily stale-device check derives its id from `(tenant, device, date)` so a
     re-run on the same day updates the existing row rather than adding a second.
+
+    **`device` is optional, and S3 is why.** A negative-stock row is raised by
+    the ledger service on whatever path drove the projection below zero, and
+    three of those paths -- a management command, a transfer receipt and a count
+    close -- have no till behind them. `sync_conflicts.device` was created
+    nullable for exactly this; the tenant and the location then have to be named
+    outright, because there is no device to read them from.
     """
+    if device is None and (tenant_id is None or location_id is None):
+        raise ValueError(
+            "A conflict raised with no device must name its tenant and its "
+            "location: there is nothing else to read them from."
+        )
     fields = dict(
-        tenant_id=device.tenant_id,
+        tenant_id=tenant_id or device.tenant_id,
         device=device,
-        location_id=location_id or device.location_id,
+        location_id=location_id or (device.location_id if device else None),
         # Bounded here rather than at each call site: `collection` comes off a
         # push payload, so it is a value a browser chose, and a 100-character
         # one would turn the refusal it names into a 500 that records nothing.

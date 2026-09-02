@@ -132,6 +132,17 @@ def slug_for(profile):
     return SLUGS[profile]
 
 
+def sedes(profile):
+    """`(code, name, city, address, phone, type)` per sede, for a later stage's
+    fixture that has to know the network's shape **before any row exists**.
+
+    S3 needs it: its plan is computed without touching the database, because the
+    seed guard counts every fixture's owned ids before the first one runs. This
+    is the same list `_sedes` returns and is public for that one reason.
+    """
+    return _sedes(profile)
+
+
 def _network(profile):
     if profile == "scale":
         return RED_20

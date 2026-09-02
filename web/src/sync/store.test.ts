@@ -6,6 +6,8 @@ import {
   currentPrices,
   fold,
   findCustomers,
+  queueCountLine,
+  queueReceiptLines,
   registerCustomer,
   searchCatalog,
 } from "./local";
@@ -331,5 +333,58 @@ describe("the outbox drains on every outcome that is not a transport failure", (
     const { database, report } = await pushReturning("rejected", null);
     expect(report.rejected).toBe(1);
     expect(await depth(database)).toBe(0);
+  });
+});
+
+describe("S3's two pushable documents, queued offline", () => {
+  /**
+   * The two halves the surfaces owe the outbox, and neither is visible from
+   * reading the component: an entry's lines have to share **one** document so
+   * the moves the push writes hang off one `receipts` document, and a count
+   * line has to reach the outbox at all — a collection nothing ever queues is
+   * dead weight and a `Conteos` label that can never show a number.
+   */
+  it("gives every line of one entry the same document and its own key", async () => {
+    const database = await store();
+    const documentId = "dddddddd-0000-0000-0000-000000000001";
+    await queueReceiptLines(database, documentId, [
+      {
+        item_id: "aaaaaaaa-0000-0000-0000-000000000001",
+        lot_code: "A-2291",
+        expires_at: "2027-03-31",
+        quantity: 360,
+        unit_cost: "1200.00",
+      },
+      {
+        item_id: "aaaaaaaa-0000-0000-0000-000000000002",
+        lot_code: "B-1180",
+        expires_at: "2027-06-30",
+        quantity: 40,
+        unit_cost: "900.00",
+      },
+    ]);
+
+    const rows = await database.collections.outbox!.find().exec();
+    expect(rows).toHaveLength(2);
+    const payloads = rows.map(
+      (one) => one.get("payload") as { document_id: string },
+    );
+    expect(new Set(payloads.map((one) => one.document_id)).size).toBe(1);
+    expect(payloads[0]!.document_id).toBe(documentId);
+    // A5 · one key per line, and it is the outbox row's own — the value the
+    // server dedupes on is the value the outbox retries under.
+    expect(new Set(rows.map((one) => one.get("client_uuid"))).size).toBe(2);
+    expect(await byKind(database)).toMatchObject({ receipt_lines: 2 });
+  });
+
+  it("queues a counted line under the collection the registry declares", async () => {
+    const database = await store();
+    await queueCountLine(database, {
+      count_id: "cccccccc-0000-0000-0000-000000000001",
+      item_id: "aaaaaaaa-0000-0000-0000-000000000001",
+      lot_id: null,
+      counted_quantity: 48,
+    });
+    expect(await byKind(database)).toMatchObject({ stock_count_lines: 1 });
   });
 });

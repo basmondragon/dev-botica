@@ -35,6 +35,7 @@ packages = [
     "core",
     "core.catalog",
     "core.demo",
+    "core.inventory",
     "core.management",
     "core.management.commands",
     "core.migrations",

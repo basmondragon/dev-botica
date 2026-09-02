@@ -14,8 +14,19 @@ import type { RxJsonSchema } from "rxdb";
 
 /** Bumped with `REGISTRY_VERSION` on the server. A client behind the server
  *  enters `degraded · versión desactualizada` and reloads the shell. */
-export const REGISTRY_VERSION = 1;
+export const REGISTRY_VERSION = 2;
 
+/**
+ * **The stores opened on a till, which is not the same list as the streams.**
+ *
+ * RxDB's open-core build caps a database at thirteen collections and the whole
+ * registry is committed to more streams than that: S2's six, S3's three, S4's
+ * six, S5's one and S8's two. So a store is opened per *shape*, and a stream
+ * that carries the same shape under a different predicate lands in the store it
+ * shares -- which is also what S2's own amendment table declares S3 adds:
+ * `stock_on_hand`, `lots` and `stock_policies`, with the other-location set
+ * inside the first of them rather than beside it.
+ */
 export const COLLECTIONS = [
   "items",
   "item_barcodes",
@@ -23,37 +34,105 @@ export const COLLECTIONS = [
   "categories",
   "item_prices",
   "customers",
+  // S3's amendment (ownership.md rule 9). **No S3 surface reads these in a
+  // browser** -- Existencias is online-only and server-authoritative -- so they
+  // are provisioned for S4's counter: its stock, its FEFO queue, its expiry
+  // display and its low-stock signal, all at zero latency.
+  "lots",
+  "stock_on_hand",
+  "stock_policies",
 ] as const;
 
 export type CollectionName = (typeof COLLECTIONS)[number];
 
 /**
- * The collections whose predicate names a sede. When the device's
- * `location_id` changes — an office moved the till — these are wiped and
- * re-pulled from a zero cursor, and the tenant-wide ones are left alone.
+ * **The pull streams**, one per collection the server serves. Each has its own
+ * cursor, its own epoch and its own digest, because each is a different
+ * predicate over a different scan -- `stock_elsewhere` is every *other* sede's
+ * rows for the references this one is short of, and a single cursor over both
+ * sets would advance past one on the other's pages.
  */
-export const LOCATION_SCOPED: readonly CollectionName[] = ["item_prices"];
+export const STREAMS = [...COLLECTIONS, "stock_elsewhere"] as const;
 
-/** The one collection a device may write at S2 (registry, `Push` column). */
-export const PUSHABLE: readonly CollectionName[] = ["customers"];
+export type StreamName = (typeof STREAMS)[number];
+
+/** Which store a stream's documents land in. Identity except where two streams
+ *  share a shape. */
+export function storeOf(stream: StreamName): CollectionName {
+  return stream === "stock_elsewhere" ? "stock_on_hand" : stream;
+}
 
 /**
- * §B.9.3 · the sync panel breaks the queue down by kind. At S2 that is
- * `Clientes 1`; S3 adds `Movimientos` and S4 `Ventas`, each by adding a line
- * here rather than a second queue.
+ * Which of a shared store's documents belong to which stream.
+ *
+ * Only the two stock streams need one, and the split is the predicate itself:
+ * this sede's rows are the till's own stock, every other sede's are the
+ * other-location set. It is what lets a reset wipe one stream without taking
+ * the other's rows with it, and what lets the daily digest compare each half
+ * against the server's own answer for that half.
+ */
+export function belongsTo(
+  stream: StreamName,
+  document: { location_id?: string | null },
+  deviceLocationId: string,
+): boolean {
+  if (stream === "stock_on_hand")
+    return document.location_id === deviceLocationId;
+  if (stream === "stock_elsewhere")
+    return document.location_id !== deviceLocationId;
+  return true;
+}
+
+/**
+ * The streams whose predicate names a sede. When the device's `location_id`
+ * changes — an office moved the till — these are wiped and re-pulled from a
+ * zero cursor, and the tenant-wide ones are left alone.
+ */
+export const LOCATION_SCOPED: readonly StreamName[] = [
+  "item_prices",
+  // All four of S3's, and for the same reason: every one of them is selected by
+  // where the till is. `lots` has no `location_id` of its own, but its
+  // predicate joins through `stock_on_hand`, so a till that moved sede holds
+  // the wrong lots exactly as it holds the wrong stock.
+  "lots",
+  "stock_on_hand",
+  "stock_elsewhere",
+  "stock_policies",
+];
+
+/** The collections a device may write. `customers` is S2's; the other two are
+ *  S3's, and neither is ever pulled back -- a till sends an event and already
+ *  knows what it sent. */
+export const PUSHABLE: readonly string[] = [
+  "customers",
+  "receipt_lines",
+  "stock_count_lines",
+];
+
+/**
+ * §B.9.3 · the sync panel breaks the queue down by kind -- `Ventas 2 ·
+ * Movimientos 9 · Conteos 1`. At S2 that is `Clientes 1`; S3 adds the next two
+ * and S4 `Ventas`, each by adding a line here rather than a second queue.
  */
 export const QUEUE_LABELS: Record<string, string> = {
   customers: "Clientes",
+  receipt_lines: "Movimientos",
+  stock_count_lines: "Conteos",
 };
 
-/** The Spanish name of each collection, for the first-sync card. */
-export const COLLECTION_LABELS: Record<CollectionName, string> = {
+/** The Spanish name of each stream, for the first-sync card. The card counts a
+ *  download, and a download is a stream. */
+export const COLLECTION_LABELS: Record<StreamName, string> = {
   items: "Catálogo",
   item_barcodes: "Códigos de barras",
   manufacturers: "Laboratorios",
   categories: "Categorías",
   item_prices: "Precios",
   customers: "Clientes",
+  lots: "Lotes",
+  stock_on_hand: "Existencias de la sede",
+  stock_elsewhere: "Existencias en otras sedes",
+  stock_policies: "Umbrales",
 };
 
 /** Every document carries these two, and the cursor and the digest are both
@@ -140,6 +219,36 @@ export interface CustomerDoc {
   data_consent: boolean;
 }
 
+export interface StockDoc {
+  id: string;
+  updated_at: string;
+  location_id: string;
+  item_id: string;
+  lot_id: string | null;
+  quantity: number;
+}
+
+export interface LotDoc {
+  id: string;
+  updated_at: string;
+  item_id: string;
+  lot_code: string;
+  expires_at: string | null;
+  unit_cost: string | null;
+}
+
+export interface PolicyDoc {
+  id: string;
+  updated_at: string;
+  item_id: string;
+  location_id: string | null;
+  min_quantity: number | null;
+  max_quantity: number | null;
+  reorder_point: number | null;
+  target_coverage_days: number | null;
+  source: string;
+}
+
 /**
  * A row a till wrote and the server has not confirmed.
  *
@@ -165,6 +274,13 @@ export interface OutboxDoc {
   /** For the sync panel's `Clientes 1` and for compaction's age rule. */
   queued_at: string;
 }
+
+const STOCK_FIELDS = {
+  location_id: { type: "string", maxLength: 36 },
+  item_id: { type: "string", maxLength: 36 },
+  lot_id: { type: ["string", "null"], maxLength: 36 },
+  quantity: { type: "number" },
+} as const;
 
 /**
  * `search_name` carries the index because the counter's catalog search is the
@@ -248,6 +364,45 @@ export const SCHEMAS = {
     ["name"],
     // Found offline by document number, which is criterion 8's second half.
     [["document"], ["name"]],
+  ),
+  lots: schema<LotDoc>(
+    {
+      item_id: { type: "string", maxLength: 36 },
+      lot_code: { type: "string", maxLength: 64 },
+      expires_at: { type: ["string", "null"], maxLength: 10 },
+      unit_cost: { type: ["string", "null"] },
+    },
+    ["item_id", "lot_code"],
+    // **`item_id` and not `expires_at`.** The FEFO queue is expiry ascending
+    // within one item, but `expires_at` is nullable -- an item that tracks no
+    // expiry has none -- and RxDB cannot index a nullable field. The lookup is
+    // by item and the ordering is over the handful of lots that come back,
+    // which is where a counter reads it anyway.
+    [["item_id"]],
+  ),
+  // **One store, two streams.** The other-location set has the same shape and
+  // the same key, and §B.9.2's tier-2 distinction -- another sede's stock,
+  // rendered with the staleness marker and its own reading -- is
+  // `location_id !== <this sede>`, which every row already carries. A second
+  // store would spend one of the thirteen RxDB opens on a boolean that is
+  // already in the document, and S4 has six streams still to place.
+  stock_on_hand: schema<StockDoc>(
+    STOCK_FIELDS,
+    ["item_id", "quantity"],
+    [["item_id"]],
+  ),
+  stock_policies: schema<PolicyDoc>(
+    {
+      item_id: { type: "string", maxLength: 36 },
+      location_id: { type: ["string", "null"], maxLength: 36 },
+      min_quantity: { type: ["number", "null"] },
+      max_quantity: { type: ["number", "null"] },
+      reorder_point: { type: ["number", "null"] },
+      target_coverage_days: { type: ["number", "null"] },
+      source: { type: "string", maxLength: 16 },
+    },
+    ["item_id"],
+    [["item_id"]],
   ),
 } satisfies Record<CollectionName, RxJsonSchema<never>>;
 

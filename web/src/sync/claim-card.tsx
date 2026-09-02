@@ -7,7 +7,7 @@ import { count } from "@/ui/format";
 import { Field, Input } from "@/ui/field";
 import { Select } from "@/ui/select";
 import { RegionError } from "@/ui/states";
-import { COLLECTION_LABELS, type CollectionName } from "./registry";
+import { COLLECTION_LABELS, type StreamName } from "./registry";
 import {
   recordFromClaim,
   requestPersistence,
@@ -253,7 +253,7 @@ function FirstSyncScreen() {
   const sync = useSync();
   const progress = sync.snapshot?.progress ?? {};
   const rows = Object.entries(progress) as [
-    CollectionName,
+    StreamName,
     { received: number; total: number },
   ][];
   const stalled = sync.snapshot?.degraded ?? null;

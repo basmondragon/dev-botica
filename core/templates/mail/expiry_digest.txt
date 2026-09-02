@@ -1,0 +1,11 @@
+{{ tenant_name }} · {{ location_name }}
+
+{{ lines|length }} lote(s) vencen dentro de {{ horizon_days }} días{% if expired_count %}, y {{ expired_count }} ya vencieron{% endif %}.
+
+{% for line in lines %}{{ line.expires_at|date:"m/Y" }}  {{ line.item }}  lote {{ line.lot }}  {{ line.quantity }} unidades{% if line.expired %}  VENCIDO{% endif %}
+{% endfor %}
+Abra Existencias para decidir qué hacer con cada lote:
+
+{{ app_url }}/inventory?expiry=valuation
+
+Botica registra la decisión de la droguería y no da de baja existencias por su cuenta.

@@ -1332,3 +1332,622 @@ class SyncConflict(TenantScopedModel):
 
     def __str__(self):
         return f"{self.type} · {self.collection}"
+
+
+# ---------------------------------------------------------------------------
+# S3 · inventory. Seven tables and one enum (ledger, architecture §3, §6).
+#
+# **No code updates a quantity in place** (A3). `stock_moves` is append-only --
+# structurally, because migration 0010 revokes UPDATE and DELETE on it from the
+# runtime role, exactly as S0 does for `audit_log` -- and `stock_on_hand` is a
+# projection maintained inside the same transaction as the moves that change it
+# by `core.inventory.ledger` and by nothing else (ledger rule 7).
+#
+# Every table below carries the same S0 convention as the fourteen above, and
+# the policies live in migration 0010 beside S0's, S1's and S2's.
+#
+# **Quantities are signed integers in base units.** `items.unit` fixes the base
+# unit and `units_per_pack` is the only conversion (§3): tablets for a
+# splittable blister, boxes for one that is not. Integer rather than decimal
+# because there is no fractional base unit in the catalog -- a `sobre 27,5 g` is
+# one sobre -- and a decimal column would render `412,000` in a grid whose whole
+# job is to be read at a glance.
+# ---------------------------------------------------------------------------
+
+
+class StockMoveType(models.TextChoices):
+    """Every value, created complete by S3, with the causing stage fixed in the
+    ledger rather than chosen at build time (enum register).
+
+    S3 causes `transfer_out`, `transfer_in`, `adjustment`, `shrinkage`, `expiry`
+    and `count`; S4 causes `sale` and `customer_return`; S6 causes `receipt` and
+    `supplier_return`. In every case the row is written by S3's ledger service.
+    """
+
+    RECEIPT = "receipt", "Recepción"
+    SALE = "sale", "Venta"
+    CUSTOMER_RETURN = "customer_return", "Devolución de cliente"
+    SUPPLIER_RETURN = "supplier_return", "Devolución a proveedor"
+    TRANSFER_OUT = "transfer_out", "Traslado · salida"
+    TRANSFER_IN = "transfer_in", "Traslado · entrada"
+    ADJUSTMENT = "adjustment", "Ajuste"
+    SHRINKAGE = "shrinkage", "Merma"
+    EXPIRY = "expiry", "Vencimiento"
+    COUNT = "count", "Conteo"
+
+
+#: The types whose quantity must be positive, and the ones whose quantity must
+#: be negative. `adjustment` and `count` are the two that take either sign, and
+#: they are the two that reconcile a record to a shelf. A move of zero is not a
+#: movement and is refused by its own CHECK.
+POSITIVE_MOVE_TYPES = (
+    StockMoveType.RECEIPT,
+    StockMoveType.CUSTOMER_RETURN,
+    StockMoveType.TRANSFER_IN,
+)
+NEGATIVE_MOVE_TYPES = (
+    StockMoveType.SALE,
+    StockMoveType.SUPPLIER_RETURN,
+    StockMoveType.TRANSFER_OUT,
+    StockMoveType.SHRINKAGE,
+    StockMoveType.EXPIRY,
+)
+
+#: The three types a human writes by hand, and the only three
+#: `POST /api/stock-moves` accepts. Every other value is the consequence of a
+#: document that has its own endpoint.
+DIRECT_MOVE_TYPES = (
+    StockMoveType.ADJUSTMENT,
+    StockMoveType.SHRINKAGE,
+    StockMoveType.EXPIRY,
+)
+
+#: The types that carry a `reason`, and the only ones that may.
+REASONED_MOVE_TYPES = (*DIRECT_MOVE_TYPES, StockMoveType.COUNT)
+
+#: The reason vocabulary, **a constrained text column rather than a Postgres
+#: enum** so a later stage adds a value without a migration. Null -- `''` here,
+#: the convention S1 fixed -- on every type outside `REASONED_MOVE_TYPES`.
+STOCK_MOVE_REASONS = (
+    "opening_stock",
+    "standalone_receipt",
+    "correction",
+    "damage",
+    "theft",
+    "loss",
+    "expired",
+    "count_adjustment",
+    "negative_resolution",
+)
+
+
+class PolicySource(models.TextChoices):
+    """Checked text, not a Postgres enum: the register names exactly one enum
+    for S3. **S3 writes `manual`; S6 writes `model`**, and this column is what
+    stops S6 erasing a threshold a pharmacist set on purpose (ledger)."""
+
+    MANUAL = "manual", "Fijado por una persona"
+    MODEL = "model", "Calculado por el modelo"
+
+
+class TransferStatus(models.TextChoices):
+    DRAFT = "draft", "Borrador"
+    DISPATCHED = "dispatched", "Despachado"
+    RECEIVED = "received", "Recibido"
+    PARTIAL = "partial", "Recibido parcial"
+
+
+class TransferResolution(models.TextChoices):
+    """How a shortfall was closed. Each writes a move: the remainder arrived
+    late, or it did not arrive. A shortfall that quietly nets out of the ledger
+    is merchandise nobody ever has to explain."""
+
+    RECEIVED_LATE = "received_late", "Llegó después"
+    LOST_IN_TRANSIT = "lost_in_transit", "No llegó"
+
+
+class CountScope(models.TextChoices):
+    FULL = "full", "Toda la sede"
+    CATEGORY = "category", "Una categoría"
+    ITEM_LIST = "item_list", "Una lista de productos"
+
+
+class CountStatus(models.TextChoices):
+    DRAFT = "draft", "Borrador"
+    COUNTING = "counting", "En conteo"
+    CLOSED = "closed", "Cerrado"
+
+
+class Lot(TenantScopedModel):
+    """A **lote**: the grain at which a pharmaceutical unit is identified (§6).
+
+    Expiry, supplier, acquisition cost and the lot's own sanitary registration
+    attach here and not to the item. **There is no `location_id`** -- a lot is a
+    property of merchandise and the same lot sits in several sedes, which is
+    what makes `Quiebre · hay 96 en Suba` and an INVIMA withdrawal answerable at
+    all.
+    """
+
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="lots")
+    lot_code = models.CharField(max_length=64)
+    #: Null **only** where `items.tracks_expiry` is false.
+    expires_at = models.DateField(null=True, blank=True)
+    supplier = models.ForeignKey(
+        Supplier, null=True, blank=True, on_delete=models.PROTECT, related_name="lots"
+    )
+    #: What these units cost to acquire, per base unit. Every valuation in the
+    #: product is `Σ quantity × unit_cost` and never a sale price -- an
+    #: inventory-at-risk figure priced at retail overstates the loss by the
+    #: whole margin. **S6 writes what a receipt actually paid** (ledger).
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    #: The lot's own sanitary registration, which is not the item's (§3).
+    invima_registration = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        db_table = "lots"
+        ordering = ["expires_at", "lot_code"]
+        indexes = [
+            # Rule 4 · S2's delta cursor, **without `location_id`**, which this
+            # table does not have. A deliberate departure from the shape the
+            # rule names: the sync predicate joins through `stock_on_hand`
+            # instead (see the registry amendment).
+            models.Index(
+                fields=["tenant", "updated_at", "id"], name="lots_delta_cursor"
+            ),
+            # The expiry horizons: `GET /api/stock/expiring`, the digest and the
+            # `Vencimiento` chip all read a window on this column.
+            models.Index(fields=["tenant", "expires_at"], name="lots_tenant_expiry"),
+            # The reverse lookup a recall starts from: a lot code to every
+            # location holding it.
+            models.Index(fields=["tenant", "lot_code"], name="lots_tenant_code"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "item", "lot_code"],
+                name="one_lot_code_per_item_per_tenant",
+            ),
+        ]
+
+    def __str__(self):
+        return self.lot_code
+
+
+class StockMove(TenantScopedModel):
+    """One movement of stock. **Append-only, and enforced by a grant** (A3).
+
+    No endpoint, job, admin action or migration in this product updates or
+    deletes a row here. A mistake is corrected by a second row, never by editing
+    the first -- which is what makes appends commute, and what makes two offline
+    tills selling the same last box a sum rather than a lost update.
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="moves"
+    )
+    #: Signed, in base units. Never zero: a move of nothing is not a movement.
+    quantity = models.IntegerField()
+    type = EnumField(max_length=24, choices=StockMoveType, db_enum="stock_move_type")
+
+    #: What caused it. `''` and null mean **the move is its own document**,
+    #: which is true only of the three direct types -- `''` for the text half
+    #: because that is the convention S1 fixed for an absent string.
+    document_type = models.CharField(max_length=32, blank=True)
+    document_id = models.UUIDField(null=True, blank=True)
+
+    #: The cost at which **these** units moved, so a cost change next month does
+    #: not retroactively rewrite last month's margin. Null means no cost was
+    #: recorded, never zero (§B.9.2 tier 3).
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+
+    #: The device's clock, stored exactly as it sent it, and the server's, which
+    #: every report reads (§5 rule 4).
+    occurred_at = models.DateTimeField(default=timezone.now)
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    #: **A reference, not a nullable one.** A device that has moved stock is
+    #: revoked and never deleted -- the rule S2 already follows for every till,
+    #: and the rule `locations` already follows for a sede holding them. `PROTECT`
+    #: is what makes it structural: `SET_NULL` would issue an `UPDATE` on this
+    #: table on the way out, and the runtime role holds no such grant.
+    device = models.ForeignKey(
+        Device, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+
+    #: **A stamped id, not a reference** -- exactly what `audit_log` does with
+    #: `actor_user_id`, and for the same reason stated there: an `owner` may
+    #: hard delete a user, `ON DELETE SET NULL` would then issue an `UPDATE` on
+    #: this table, and the runtime role holds no UPDATE grant on it. A cascade
+    #: would make every hard delete of a person fail with a permission error.
+    user_id = models.UUIDField(null=True, blank=True)
+    #: The other half of S0's referential rule: **stamp the human-readable
+    #: identity at write time**. The lot trace is the INVIMA answer and names the
+    #: person who moved each unit; a trace that reads as nobody's after a
+    #: roster change is not an answer an inspector takes.
+    user_name = models.CharField(max_length=200, blank=True)
+
+    #: A5 · uuid v7 from a till, uuid v5 over the document's own natural key
+    #: where the server originated the move. **Never null**, so
+    #: `UNIQUE (tenant_id, client_uuid)` is a real guard on every path: pressing
+    #: a transfer resolution twice appends nothing, for the same reason a
+    #: replayed push does.
+    client_uuid = models.UUIDField()
+
+    #: Coined (*Gated on*). The ledger's `adjustment` row requires "a stated
+    #: reason" and gives it no column. Constrained text over the vocabulary in
+    #: `STOCK_MOVE_REASONS`, so a later stage adds a value without a migration.
+    reason = models.CharField(max_length=32, blank=True)
+    #: Coined (*Gated on*).
+    note = models.TextField(blank=True)
+    #: Coined (*Gated on*), and **stamped rather than derived**: whether the
+    #: chosen lot was the FEFO head is unrecoverable once the projection moves
+    #: on, which is the argument the ledger already makes for
+    #: `sale_lines.unit_cost`.
+    fefo_override = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "stock_moves"
+        ordering = ["-recorded_at"]
+        indexes = [
+            # Rule 4 · three read paths, all S3's own on S3's own table. The
+            # second is named in the ledger as created by S3 and inherited by
+            # S6 and S9.
+            models.Index(
+                fields=["tenant", "lot", "recorded_at"], name="stock_moves_lot_trace"
+            ),
+            models.Index(
+                fields=["tenant", "location", "item", "recorded_at"],
+                name="stock_moves_item_history",
+            ),
+            models.Index(
+                fields=["tenant", "location", "recorded_at"],
+                name="stock_moves_location_scan",
+            ),
+        ]
+        constraints = [
+            # A5, rule 8. The whole of deduplication is this index.
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_move_per_client_uuid"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(quantity=0), name="a_move_moves_something"
+            ),
+            # The sign of each type, in the database rather than in a service
+            # somebody could route around.
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(type__in=POSITIVE_MOVE_TYPES) | models.Q(quantity__gt=0)
+                )
+                & (~models.Q(type__in=NEGATIVE_MOVE_TYPES) | models.Q(quantity__lt=0)),
+                name="a_move_carries_the_sign_of_its_type",
+            ),
+            # A reason is required with the four reconciling types and refused
+            # with every other one.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(type__in=REASONED_MOVE_TYPES) & ~models.Q(reason="")
+                )
+                | (~models.Q(type__in=REASONED_MOVE_TYPES) & models.Q(reason="")),
+                name="a_reason_belongs_to_a_reconciling_move",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reason="") | models.Q(reason__in=STOCK_MOVE_REASONS),
+                name="move_reason_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.type} {self.quantity}"
+
+
+class StockOnHand(TenantScopedModel):
+    """The projection. **Derived, rebuildable, never the source of truth** (A3).
+
+    It exists because summing a ledger on every grid page is not a 400ms query
+    (§4), and for no other reason. It is written by `core.inventory.ledger` and
+    by nothing else, it is never read as truth in an argument about what
+    happened, and the rebuild is the standing proof that dropping it costs
+    nothing.
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    #: Signed: §5 rule 2 lets a sale drive it below zero rather than refusing at
+    #: a counter, and the negative is an exception raised to the office.
+    quantity = models.IntegerField(default=0)
+
+    class Meta:
+        db_table = "stock_on_hand"
+        ordering = ["location__name", "item__name"]
+        indexes = [
+            # Rule 4 · S2's delta cursor, in the ledger's own four-column shape.
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="stock_on_hand_delta_cursor",
+            ),
+            # Rule 4 · **the second delta cursor, and this table is the one
+            # place in the product that needs two.** It serves the
+            # `stock_elsewhere` collection, whose scan is not location-keyed at
+            # all: it is every *other* sede's rows for the items this one is in
+            # trouble on, so the index it ranges over is the tenant-wide shape
+            # and the item set is a residual applied per row. One index per
+            # collection, and both are cursor shapes rather than a compromise
+            # that serves neither.
+            models.Index(
+                fields=["tenant", "updated_at", "id"],
+                name="stock_on_hand_tenant_cursor",
+            ),
+            # The availability query behind `hay N en <sede>` and behind S4's
+            # counter lookup: one item, every location.
+            models.Index(
+                fields=["tenant", "item", "location"], name="stock_on_hand_availability"
+            ),
+        ]
+        constraints = [
+            # **NULLS NOT DISTINCT.** Without it a lot-less item silently
+            # accumulates one projection row per write, and every figure on the
+            # screen is the last one written rather than the sum.
+            models.UniqueConstraint(
+                fields=["tenant", "location", "item", "lot"],
+                name="one_projection_row_per_key",
+                nulls_distinct=False,
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} @ {self.location_id}: {self.quantity}"
+
+
+class StockPolicy(TenantScopedModel):
+    """The thresholds the `Estado` derivation reads before a forecast exists.
+
+    A location-specific row wins over a network-wide one for the same item.
+    **S3 writes `manual` and S6 writes `model`** (ledger); a write over a
+    `model` row flips `source` back, which is the point of the column.
+    """
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="policies")
+    #: Null means network-wide.
+    location = models.ForeignKey(
+        Location, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    min_quantity = models.IntegerField(null=True, blank=True)
+    max_quantity = models.IntegerField(null=True, blank=True)
+    reorder_point = models.IntegerField(null=True, blank=True)
+    target_coverage_days = models.IntegerField(null=True, blank=True)
+    source = models.CharField(
+        max_length=16, choices=PolicySource, default=PolicySource.MANUAL
+    )
+
+    class Meta:
+        db_table = "stock_policies"
+        ordering = ["item__name"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="stock_policies_delta_cursor",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "item", "location"],
+                name="one_policy_per_item_and_scope",
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source__in=PolicySource.values),
+                name="policy_source_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} · {self.source}"
+
+
+class Transfer(TenantScopedModel):
+    """Merchandise moving between two sedes, as a document with two ends and two
+    moments (§3).
+
+    Between dispatch and receipt the units are on no shelf and are reported as
+    **En tránsito** -- a figure on the transfer, never a state in the `Estado`
+    column, because a box in a van belongs to neither sede's shelf and
+    pretending otherwise is how transfers lose merchandise.
+    """
+
+    #: Per tenant, sequential, allocated server-side.
+    number = models.PositiveIntegerField()
+    origin_location = models.ForeignKey(
+        Location, on_delete=models.PROTECT, related_name="+"
+    )
+    destination_location = models.ForeignKey(
+        Location, on_delete=models.PROTECT, related_name="+"
+    )
+    status = models.CharField(
+        max_length=16, choices=TransferStatus, default=TransferStatus.DRAFT
+    )
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    dispatched_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    dispatched_by_name = models.CharField(max_length=200, blank=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+    received_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    received_by_name = models.CharField(max_length=200, blank=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "transfers"
+        ordering = ["-number"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "status", "-number"], name="transfers_work_list"
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "number"], name="one_transfer_number_per_tenant"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=TransferStatus.values),
+                name="transfer_status_is_declared",
+            ),
+            # A transfer to the sede it left is not a transfer.
+            models.CheckConstraint(
+                condition=~models.Q(origin_location=models.F("destination_location")),
+                name="a_transfer_has_two_ends",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Traslado {self.number}"
+
+
+class TransferLine(TenantScopedModel):
+    transfer = models.ForeignKey(
+        Transfer, on_delete=models.CASCADE, related_name="lines"
+    )
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    quantity_requested = models.PositiveIntegerField(default=0)
+    quantity_dispatched = models.PositiveIntegerField(default=0)
+    quantity_received = models.PositiveIntegerField(default=0)
+    #: Null until a shortfall is closed. `''` is not used here: this is a state
+    #: with three values and a stated absence, not an identifier.
+    resolution = models.CharField(max_length=16, choices=TransferResolution, blank=True)
+
+    class Meta:
+        db_table = "transfer_lines"
+        ordering = ["item__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "transfer", "item", "lot"],
+                name="one_transfer_line_per_item_and_lot",
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=models.Q(resolution="")
+                | models.Q(resolution__in=TransferResolution.values),
+                name="transfer_resolution_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} × {self.quantity_requested}"
+
+
+class StockCount(TenantScopedModel):
+    """A cycle count: the shelf reconciled to the record by writing the
+    difference down, not by erasing it (§6).
+
+    It carries the client-write quartet because the counting surface is walked
+    around a back room where the wifi is worst (ledger rule 8).
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    scope = models.CharField(max_length=16, choices=CountScope, default=CountScope.FULL)
+    category = models.ForeignKey(
+        Category, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    status = models.CharField(
+        max_length=16, choices=CountStatus, default=CountStatus.COUNTING
+    )
+    counted_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    counted_by_name = models.CharField(max_length=200, blank=True)
+    closed_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    closed_by_name = models.CharField(max_length=200, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    client_uuid = models.UUIDField()
+    device = models.ForeignKey(
+        Device, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    occurred_at = models.DateTimeField(default=timezone.now)
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "stock_counts"
+        ordering = ["-recorded_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_count_per_client_uuid"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=CountStatus.values),
+                name="count_status_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(scope__in=CountScope.values),
+                name="count_scope_is_declared",
+            ),
+            # A count scoped to a category with no category is a count over
+            # everything wearing a narrower label.
+            models.CheckConstraint(
+                condition=~models.Q(scope=CountScope.CATEGORY)
+                | models.Q(category__isnull=False),
+                name="a_category_count_names_a_category",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Conteo {self.location_id} · {self.status}"
+
+
+class StockCountLine(TenantScopedModel):
+    """One counted line. `expected_quantity` is stamped **when the line is
+    entered**, not at close.
+
+    That is the whole arithmetic of a count: the adjusting move is the
+    discrepancy measured at entry, and every sale made during the count applies
+    on top of it. Stamping at close instead double-counts them.
+    """
+
+    count = models.ForeignKey(
+        StockCount, on_delete=models.CASCADE, related_name="lines"
+    )
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    expected_quantity = models.IntegerField(default=0)
+    counted_quantity = models.IntegerField(default=0)
+    entered_at = models.DateTimeField(default=timezone.now)
+
+    client_uuid = models.UUIDField()
+    device = models.ForeignKey(
+        Device, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    occurred_at = models.DateTimeField(default=timezone.now)
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "stock_count_lines"
+        ordering = ["item__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_count_line_per_client_uuid"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "count", "item", "lot"],
+                name="one_count_line_per_item_and_lot",
+                nulls_distinct=False,
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id}: {self.counted_quantity}"

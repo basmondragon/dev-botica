@@ -1,4 +1,4 @@
-import type { CollectionName } from "./registry";
+import { belongsTo, storeOf, type StreamName } from "./registry";
 import type { SyncDatabase } from "./store";
 
 /**
@@ -10,6 +10,11 @@ import type { SyncDatabase } from "./store";
  * strings its pull serialises, for this reason — a SQL `md5(string_agg(...))`
  * would compare a timestamp Postgres formatted against one the browser stored,
  * which is a permanent false mismatch that re-pulls every collection every day.
+ *
+ * **It hashes a stream, not a store.** Two streams can share a store, and the
+ * server answers per stream -- so the store is filtered by the stream's own
+ * predicate before it is hashed, or every day would find a mismatch on both
+ * halves of a set that is perfectly in step.
  */
 
 export interface LocalDigest {
@@ -19,13 +24,18 @@ export interface LocalDigest {
 
 export async function localDigest(
   database: SyncDatabase,
-  name: CollectionName,
+  name: StreamName,
+  deviceLocationId: string,
 ): Promise<LocalDigest> {
-  const rows = (await database.collections[name]!.find().exec()) as unknown as {
+  const rows = (await database.collections[
+    storeOf(name)
+  ]!.find().exec()) as unknown as {
     id: string;
     updated_at: string;
+    location_id?: string | null;
   }[];
   const ordered = rows
+    .filter((row) => belongsTo(name, row, deviceLocationId))
     .map((row) => ({ id: row.id, updated_at: row.updated_at }))
     .sort((a, b) =>
       a.updated_at === b.updated_at

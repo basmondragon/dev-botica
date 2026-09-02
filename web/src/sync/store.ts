@@ -17,11 +17,19 @@ import {
 /**
  * The local store: RxDB over IndexedDB (architecture §5).
  *
- * **Seven collections: the registry's six, plus the outbox.** The six are a
- * snapshot of server state and nothing else writes them; the outbox is
+ * **Ten collections: the registry's nine stores, plus the outbox.** The nine are
+ * a snapshot of server state and nothing else writes them; the outbox is
  * local-only, has no server counterpart, and is the only durable record of a
  * write the server has not seen. That split *is* §5 rule 1 — the till's store
  * is a server snapshot plus its own pending events.
+ *
+ * **Stores, not streams.** RxDB's open-core build caps a database at thirteen
+ * collections and the registry is committed to more streams than that across
+ * S2, S3, S4, S5 and S8, so two streams that carry the same shape share a store
+ * — `stock_on_hand` holds both the till's own sede and the capped
+ * other-location set, split by the `location_id` every row already carries
+ * (`registry.belongsTo`). Opening one store per stream would spend the budget
+ * on a distinction that is already in the document.
  *
  * **`multiInstance` over `BroadcastChannel`, with leader election.** Two tabs
  * both replicating would be *safe* — the push is idempotent — and would double

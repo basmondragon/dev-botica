@@ -1,5 +1,6 @@
 import { getRxStorageMemory } from "rxdb/plugins/storage-memory";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { localDigest } from "./digest";
 import { SyncEngine } from "./engine";
 import { queue } from "./outbox";
 import { closeStore, openStore, type SyncDatabase } from "./store";
@@ -122,6 +123,72 @@ describe("a reset never discards an unpushed row", () => {
 
     expect(reset).toBe(true);
     expect(await database.collections.items!.count().exec()).toBe(0);
+  });
+});
+
+describe("two streams in one store", () => {
+  /**
+   * RxDB's open-core build caps a database at thirteen collections and the
+   * registry is committed to more streams than that across S2, S3, S4, S5 and
+   * S8 — so `stock_on_hand` holds both the till's own sede and the capped
+   * other-location set, split by the `location_id` every row already carries.
+   * The split has to hold in the two places it can silently fail: a reset, and
+   * the daily digest.
+   */
+  async function seedStock(id: string, locationId: string) {
+    await database.collections.stock_on_hand!.insert({
+      id,
+      updated_at: "2026-09-01T10:00:00.000000Z",
+      location_id: locationId,
+      item_id: "dddddddd-0000-0000-0000-000000000001",
+      lot_id: null,
+      quantity: 12,
+    });
+  }
+
+  it("resets one stream without taking the other's rows with it", async () => {
+    // Wiping the whole store would leave the other stream's cursor where it
+    // was, so it would never re-serve what was removed and the till would sit
+    // on a hole until the next daily digest.
+    engine = new SyncEngine(database, DEVICE);
+    await seedStock("50000000-0000-0000-0000-000000000001", DEVICE.location_id);
+    await seedStock(
+      "50000000-0000-0000-0000-000000000002",
+      "99999999-9999-9999-9999-999999999999",
+    );
+
+    expect(await engine.reset("stock_elsewhere")).toBe(true);
+
+    const held = await database.collections.stock_on_hand!.find().exec();
+    expect(held.map((one) => one.get("location_id"))).toEqual([
+      DEVICE.location_id,
+    ]);
+  });
+
+  it("hashes each stream against its own half of the store", async () => {
+    // The server answers per stream. Hashing the whole store would find a
+    // mismatch on both halves of a set that is perfectly in step, and re-pull
+    // the pair every single day.
+    await seedStock("50000000-0000-0000-0000-000000000001", DEVICE.location_id);
+    await seedStock(
+      "50000000-0000-0000-0000-000000000002",
+      "99999999-9999-9999-9999-999999999999",
+    );
+
+    const own = await localDigest(
+      database,
+      "stock_on_hand",
+      DEVICE.location_id,
+    );
+    const others = await localDigest(
+      database,
+      "stock_elsewhere",
+      DEVICE.location_id,
+    );
+
+    expect(own.count).toBe(1);
+    expect(others.count).toBe(1);
+    expect(own.checksum).not.toBe(others.checksum);
   });
 });
 
@@ -267,6 +334,11 @@ describe("the daily divergence check", () => {
     // outlived the safety horizon. Nothing was added or removed; the till is
     // simply holding an older version of a row it already has. **That is the
     // whole reason the server computes a checksum at all.**
+    // **The store opened by `beforeEach` is closed first.** A browser is one
+    // till and holds one store; two open at once is a test artefact, and the
+    // orphan RxDB keeps counting against its open-collection limit is what made
+    // every test after this one time out once S3's four collections landed.
+    await closeStore();
     const database = await openStore(
       `digest-${Math.random().toString(36).slice(2)}`,
       getRxStorageMemory(),

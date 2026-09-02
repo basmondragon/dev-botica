@@ -25,7 +25,13 @@ USERS_USING = (
 
 #: The runtime role holds INSERT and SELECT here and must hold neither UPDATE
 #: nor DELETE. Append-only is a grant, not a convention.
-APPEND_ONLY_TABLES = {"audit_log"}
+#:
+#: `stock_moves` joins `audit_log` at S3, and for a sharper reason: A3 makes the
+#: whole product's stock the sum of this table, so an UPDATE granted back by a
+#: later migration would corrupt the ledger and the projection **consistently**
+#: -- which is the one failure the rebuild check cannot see, because it leaves
+#: both sides agreeing on the same wrong number.
+APPEND_ONLY_TABLES = {"audit_log", "stock_moves"}
 
 COMMAND_NAMES = {"*": "ALL", "r": "SELECT", "a": "INSERT", "w": "UPDATE", "d": "DELETE"}
 
@@ -66,7 +72,7 @@ EXPECTED_POLICIES = {
 class Command(BaseCommand):
     help = (
         "Assert RLS is enabled, forced and correctly keyed everywhere, that the "
-        "runtime role owns nothing, and that audit_log stays append-only."
+        "runtime role owns nothing, and that the append-only tables stay so."
     )
 
     def handle(self, *args, **options):
@@ -193,7 +199,9 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 "RLS enabled, forced and keyed to the pin on every tenant table; "
-                "runtime role owns nothing; audit_log is append-only"
+                "runtime role owns nothing; "
+                + " and ".join(sorted(APPEND_ONLY_TABLES))
+                + " are append-only"
             )
         )
 

@@ -582,6 +582,11 @@ def test_every_registry_collection_has_a_cursor_index_in_one_of_two_shapes():
             if collection.scope == registry.LOCATION_SCOPED
             else ["tenant", "updated_at", "id"]
         )
+        # `stock_on_hand` backs two collections and therefore carries both
+        # shapes: its own sede's rows range over the location cursor, and the
+        # other-location set ranges over the tenant-wide one with the item set
+        # as a residual. One index per collection, and both are cursor shapes
+        # rather than one compromise that serves neither.
         shapes = [list(index.fields) for index in collection.model._meta.indexes]
         assert wanted in shapes, (
             f"{collection.name} is in the registry with no delta-cursor index "

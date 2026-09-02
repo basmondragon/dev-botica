@@ -195,6 +195,13 @@ class ItemRow(Schema):
     splittable: bool
     units_per_pack: int
     tracks_stock: bool
+    #: S3's receiving line reads these two to decide whether to ask for a lot
+    #: code and for a date, and a scan resolves to this shape and no other. They
+    #: were on `ItemDetail` alone until the surface that needs them per row
+    #: existed; they are two booleans on a row S1 already serialises, not a
+    #: second request per scanned line at a counter.
+    tracks_lots: bool
+    tracks_expiry: bool
     active: bool
     #: The network-wide price in force today. A sede override is shown in the
     #: item panel, where its scope can be named.
@@ -208,8 +215,6 @@ class ItemDetail(ItemRow):
     requires_prescription: bool
     controlled: bool
     cold_chain: bool
-    tracks_lots: bool
-    tracks_expiry: bool
     custom: dict
     external_code: str
     #: Absent for a `cashier`, with `supplier_items.cost`.
@@ -460,6 +465,8 @@ def _item_row(row):
         "splittable": row.splittable,
         "units_per_pack": row.units_per_pack,
         "tracks_stock": row.tracks_stock,
+        "tracks_lots": row.tracks_lots,
+        "tracks_expiry": row.tracks_expiry,
         "active": row.active,
         "price": getattr(row, "network_price", None),
     }

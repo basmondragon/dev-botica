@@ -2651,6 +2651,1520 @@
           }
         ]
       }
+    },
+    "/api/stock": {
+      "get": {
+        "operationId": "core_inventory_api_list_stock",
+        "summary": "List Stock",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "expired",
+                    "stockout",
+                    "expiring_urgent",
+                    "expiring",
+                    "reorder_point",
+                    "overstock",
+                    "sufficient"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "action_required",
+            "schema": {
+              "default": false,
+              "title": "Action Required",
+              "type": "boolean"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "expiry",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "expired",
+                    "valuation",
+                    "alert",
+                    "notice",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiry"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockPage"
+                }
+              }
+            }
+          }
+        },
+        "description": "The Existencias grid: one row per `(item, location, lot)`.\n\nA `cashier` reads it **network-wide and read-only**: §2 grants exactly that,\nso `network_read` is the mode here and the interface pre-selects their home\nsede in the `Sede` chip rather than confining the query.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock/summary": {
+      "get": {
+        "operationId": "core_inventory_api_stock_summary",
+        "summary": "Stock Summary",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "expiry",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "expired",
+                    "valuation",
+                    "alert",
+                    "notice",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiry"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockSummaryOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Per-state counts, network-wide and per sede.\n\nIt takes the same filters as the grid minus the state itself, so the chip's\nown counts describe the set the chip is about to narrow. **A check asserts\nagainst these figures rather than against a literal**: they are whatever the\nfixtures built, and a check that hard-codes them is red the first time a\nfixture changes.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock/availability": {
+      "get": {
+        "operationId": "core_inventory_api_stock_availability",
+        "summary": "Stock Availability",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemAvailabilityOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One item, the quantity at every location, lot by lot.\n\n§2 grants a `cashier` a network-wide stock lookup, and this is it: the\nsource of `hay 96 en Suba` and of S4's counter lookup.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock/expiring": {
+      "get": {
+        "operationId": "core_inventory_api_stock_expiring",
+        "summary": "Stock Expiring",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpiringOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Value and lot count by horizon, per sede and network-wide, **plus the\ntotal inventory value at the same cost basis**.\n\nThe total is the denominator: S9's `4,6% del inventario valorizado` tile is\na ratio with no meaning without it, and returning it here is what stops S9\ncomputing a second valuation on a different basis. A percentage whose\nnumerator and denominator came from two cost bases is a number nobody can\ndefend to an accountant.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock-moves": {
+      "get": {
+        "operationId": "core_inventory_api_list_moves",
+        "summary": "List Moves",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "lot_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lot Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "receipt",
+                    "sale",
+                    "customer_return",
+                    "supplier_return",
+                    "transfer_out",
+                    "transfer_in",
+                    "adjustment",
+                    "shrinkage",
+                    "expiry",
+                    "count"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "document_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_MoveOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The ledger, filterable. **Read-only, and there is no `PATCH` or `DELETE`\non this resource at any path** -- nor a grant that would let one exist.\n\nA `cashier` reads their own home sede and no other, which is the scoped mode\nof S0's helper rather than a filter written here.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_inventory_api_create_move",
+        "summary": "Create Move",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MoveOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "The only direct write, and it accepts three types and no others.\n\nA body naming any other type is rejected, because every other type is a\nconsequence of a document that has its own endpoint -- and a general \"write\nme a move\" endpoint would be the hole through which a future stage bypasses\nthe ledger service.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/lots": {
+      "get": {
+        "operationId": "core_inventory_api_list_lots",
+        "summary": "List Lots",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "code",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "expiring_within_days",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiring Within Days"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_LotOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "Lots by item, by code, by expiry window, with the locations holding each.\n\nThe code lookup is the **reverse half of the recall answer**: a lot code in,\nevery sede holding it out.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/lots/{lot_id}": {
+      "get": {
+        "operationId": "core_inventory_api_read_lot",
+        "summary": "Read Lot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lot_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Lot Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LotOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/lots/{lot_id}/trace": {
+      "get": {
+        "operationId": "core_inventory_api_lot_trace",
+        "summary": "Lot Trace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lot_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Lot Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "**The recall answer.** Given a lot: who has it, who bought it, on which\ndevice, in which shift and at what moment.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/lots/{lot_id}/trace.csv": {
+      "get": {
+        "operationId": "core_inventory_api_lot_trace_csv",
+        "summary": "Lot Trace Csv",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lot_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Lot Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "The same rows in the same order, as a file somebody hands to an inspector.\n\nCSV rather than a PDF of a table: the receiving end is a spreadsheet or a\nregulator's own system, and a rendered table is the one format neither can\nread back.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/receipts": {
+      "post": {
+        "operationId": "core_inventory_api_create_receipt",
+        "summary": "Create Receipt",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "A standalone receipt or opening stock: **`adjustment` rows, not\n`receipt` rows.**\n\nThe ledger fixes `receipt` as caused by S6, when a goods receipt against a\npurchase order is confirmed, and the ledger wins on ownership. The\nconsequence to hold onto: cost of goods must never be computed by filtering\n`type = 'receipt'` -- it reads `stock_moves.unit_cost` and the move's\n`lot_id` across every positive type.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/transfers": {
+      "get": {
+        "operationId": "core_inventory_api_list_transfers",
+        "summary": "List Transfers",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "dispatched",
+                    "received",
+                    "partial"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_TransferOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The transfer list, **with `partial` first -- that is the work list.**\n\nA shortfall stays on it until a person closes it by choosing one of two\nanswers, each of which writes a move.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_inventory_api_create_transfer",
+        "summary": "Create Transfer",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a `draft` with its lines. **A draft moves no units** -- its lines\nare a request, not a hold: nothing in v1 reserves stock.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/transfers/{transfer_id}": {
+      "patch": {
+        "operationId": "core_inventory_api_patch_transfer",
+        "summary": "Patch Transfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Transfer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Edit lines. **`draft` only** -- a dispatched transfer is a fact, not a\nform, and editing one would silently disagree with the moves it already\nwrote.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_inventory_api_delete_transfer",
+        "summary": "Delete Transfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Transfer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "`draft` only. Nothing that has moved stock is ever deleted.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/transfers/{transfer_id}/dispatch": {
+      "post": {
+        "operationId": "core_inventory_api_dispatch_transfer",
+        "summary": "Dispatch Transfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Transfer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "`draft → dispatched`. Writes one `transfer_out` per line at the origin.\n\n**This is where `negative_stock_block_outbound` is read**, and the only kind\nof place it ever is: refusal is a policy at the endpoint and never in the\nledger service, because the sale path must never ask this question (§5\nrule 2).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/transfers/{transfer_id}/receive": {
+      "post": {
+        "operationId": "core_inventory_api_receive_transfer",
+        "summary": "Receive Transfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Transfer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "`dispatched → received` or `partial`. Writes one `transfer_in` per\nreceived line at the destination.\n\nA `cashier` at the destination may press this: they are the person opening\nthe box. They may not create, dispatch or resolve.\n\n**It is refused on a `partial`, and that is not a restriction for its own\nsake.** A shortfall is closed through `/resolve`, which writes the move that\naccounts for the missing units; receiving again would set\n`quantity_received` to the full dispatched figure while the ledger appended\nnothing -- the second `transfer_in` carries the same document key as the\nfirst and is deduplicated -- and the line would then claim units the\ndestination never got. Two doors to one outcome, one of which quietly lies\nabout the shelf, is worse than one door.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/transfers/{transfer_id}/resolve": {
+      "post": {
+        "operationId": "core_inventory_api_resolve_transfer",
+        "summary": "Resolve Transfer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Transfer Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Close a shortfall by choosing one of two answers, each of which writes a\nmove.\n\n**`received_late`** writes a further `transfer_in` at the destination: the\nremainder arrived, and the network total returns to where it started.\n\n**`lost_in_transit`** writes a **pair** at the origin -- a `transfer_in` of\nthe shortfall, then a `shrinkage` of the same size with reason `loss` -- and\nthe pair is the whole point. The units left the origin's shelf at dispatch,\nso the network total already fell by the shortfall; a bare `shrinkage` here\nwould take it down a second time and the total would end at `N − 24` on a\ntwelve-unit loss, with both moves looking individually correct. The\n`transfer_in` returns the un-received units to the origin's books, which is\nexactly the inverse of the `transfer_out` that put them in a van, and the\n`shrinkage` is then the row that carries the reason. **A shortfall that\nquietly nets out of the ledger is merchandise nobody ever has to explain**,\nand this is what stops it.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock-counts": {
+      "get": {
+        "operationId": "core_inventory_api_list_counts",
+        "summary": "List Counts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "counting",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountPage"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_inventory_api_create_count",
+        "summary": "Create Count",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock-counts/{count_id}/lines": {
+      "post": {
+        "operationId": "core_inventory_api_enter_count_lines",
+        "summary": "Enter Count Lines",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "count_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Count Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Enter or update counted lines.\n\n**`expected_quantity` is stamped when the line is entered**, not at close --\nwhich is the whole arithmetic of a count. The adjusting move is the\ndiscrepancy measured at entry, and every sale made while the count is open\napplies on top of it. Stamping at close instead double-counts them.\n\nIdempotent on `client_uuid` per line, so an offline device replaying a batch\ndoes not double-count (A5). A second entry of the same `(item, lot)` under a\n**new** key is a person recounting: the counted figure moves and the stamp\nstays, because \"entered\" happened once.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountLinesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock-counts/{count_id}/close": {
+      "post": {
+        "operationId": "core_inventory_api_close_count",
+        "summary": "Close Count",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "count_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Count Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "`counting → closed`. Writes one `count` move per differing line and\nresolves any open negative-stock exception it covers, **in the same\ntransaction**.\n\nA count that wrote the move and left the exception open would leave the\noffice chasing a discrepancy somebody had already fixed.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/stock-policies": {
+      "get": {
+        "operationId": "core_inventory_api_list_policies",
+        "summary": "List Policies",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "manual",
+                    "model"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PolicyOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "Thresholds by item and location, **with `source` on every row** -- the\none column that tells a regente which numbers are theirs.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "core_inventory_api_write_policies",
+        "summary": "Write Policies",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write thresholds, one item or many, **always at `source = manual`**.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyWriteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/inventory": {
+      "get": {
+        "operationId": "core_inventory_api_read_inventory_settings",
+        "summary": "Read Inventory Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_inventory_api_write_inventory_settings",
+        "summary": "Write Inventory Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write the group through S0's helper, which issues one `jsonb_set` and\nleaves every other group as it stands (ledger rule 5).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventorySettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3607,6 +5121,14 @@
             "title": "Tracks Stock",
             "type": "boolean"
           },
+          "tracks_lots": {
+            "title": "Tracks Lots",
+            "type": "boolean"
+          },
+          "tracks_expiry": {
+            "title": "Tracks Expiry",
+            "type": "boolean"
+          },
           "active": {
             "title": "Active",
             "type": "boolean"
@@ -3641,6 +5163,8 @@
           "splittable",
           "units_per_pack",
           "tracks_stock",
+          "tracks_lots",
+          "tracks_expiry",
           "active",
           "price"
         ],
@@ -3823,6 +5347,14 @@
             "title": "Tracks Stock",
             "type": "boolean"
           },
+          "tracks_lots": {
+            "title": "Tracks Lots",
+            "type": "boolean"
+          },
+          "tracks_expiry": {
+            "title": "Tracks Expiry",
+            "type": "boolean"
+          },
           "active": {
             "title": "Active",
             "type": "boolean"
@@ -3861,14 +5393,6 @@
           },
           "cold_chain": {
             "title": "Cold Chain",
-            "type": "boolean"
-          },
-          "tracks_lots": {
-            "title": "Tracks Lots",
-            "type": "boolean"
-          },
-          "tracks_expiry": {
-            "title": "Tracks Expiry",
             "type": "boolean"
           },
           "custom": {
@@ -3947,6 +5471,8 @@
           "splittable",
           "units_per_pack",
           "tracks_stock",
+          "tracks_lots",
+          "tracks_expiry",
           "active",
           "price",
           "description",
@@ -3955,8 +5481,6 @@
           "requires_prescription",
           "controlled",
           "cold_chain",
-          "tracks_lots",
-          "tracks_expiry",
           "custom",
           "external_code",
           "service_cost",
@@ -6541,6 +8065,2666 @@
           "stale_device_hours"
         ],
         "title": "SyncSettingsIn",
+        "type": "object"
+      },
+      "AvailabilityOut": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "quantity"
+        ],
+        "title": "AvailabilityOut",
+        "type": "object"
+      },
+      "StockPage": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/StockRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "action_required": {
+            "title": "Action Required",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size",
+          "action_required"
+        ],
+        "title": "StockPage",
+        "type": "object"
+      },
+      "StockRow": {
+        "description": "One row of Existencias, at `(item, location, lot)` grain -- which is\n`stock_on_hand`'s own key, exactly.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "tracks_lots": {
+            "title": "Tracks Lots",
+            "type": "boolean"
+          },
+          "invima_status": {
+            "title": "Invima Status",
+            "type": "string"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "bar_percentage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bar Percentage"
+          },
+          "state": {
+            "enum": [
+              "expired",
+              "stockout",
+              "expiring_urgent",
+              "expiring",
+              "reorder_point",
+              "overstock",
+              "sufficient"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "state_ordinal": {
+            "title": "State Ordinal",
+            "type": "integer"
+          },
+          "reorder_point": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reorder Point"
+          },
+          "max_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Quantity"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Quantity"
+          },
+          "target_coverage_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Coverage Days"
+          },
+          "policy_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "manual",
+                  "model"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Source"
+          },
+          "elsewhere": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AvailabilityOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "presentation",
+          "unit",
+          "tracks_lots",
+          "invima_status",
+          "manufacturer_name",
+          "location_id",
+          "location_name",
+          "lot_id",
+          "lot_code",
+          "expires_at",
+          "quantity",
+          "bar_percentage",
+          "state",
+          "state_ordinal",
+          "reorder_point",
+          "max_quantity",
+          "min_quantity",
+          "target_coverage_days",
+          "policy_source",
+          "elsewhere"
+        ],
+        "title": "StockRow",
+        "type": "object"
+      },
+      "LocationSummaryOut": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "action_required": {
+            "title": "Action Required",
+            "type": "integer"
+          },
+          "states": {
+            "items": {
+              "$ref": "#/components/schemas/StateCountOut"
+            },
+            "title": "States",
+            "type": "array"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "rows",
+          "action_required",
+          "states"
+        ],
+        "title": "LocationSummaryOut",
+        "type": "object"
+      },
+      "StateCountOut": {
+        "properties": {
+          "state": {
+            "enum": [
+              "expired",
+              "stockout",
+              "expiring_urgent",
+              "expiring",
+              "reorder_point",
+              "overstock",
+              "sufficient"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "ordinal",
+          "count"
+        ],
+        "title": "StateCountOut",
+        "type": "object"
+      },
+      "StockSummaryOut": {
+        "properties": {
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "action_required": {
+            "title": "Action Required",
+            "type": "integer"
+          },
+          "states": {
+            "items": {
+              "$ref": "#/components/schemas/StateCountOut"
+            },
+            "title": "States",
+            "type": "array"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/LocationSummaryOut"
+            },
+            "title": "Locations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows",
+          "action_required",
+          "states",
+          "locations"
+        ],
+        "title": "StockSummaryOut",
+        "type": "object"
+      },
+      "ItemAvailabilityOut": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "in_transit": {
+            "default": 0,
+            "title": "In Transit",
+            "type": "integer"
+          },
+          "by_location": {
+            "items": {
+              "$ref": "#/components/schemas/TransitAvailabilityOut"
+            },
+            "title": "By Location",
+            "type": "array"
+          },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/LotAvailabilityOut"
+            },
+            "title": "Lots",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_id",
+          "item_name",
+          "unit",
+          "total",
+          "by_location",
+          "lots"
+        ],
+        "title": "ItemAvailabilityOut",
+        "type": "object"
+      },
+      "LotAvailabilityOut": {
+        "properties": {
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lot_id",
+          "lot_code",
+          "expires_at",
+          "location_id",
+          "location_name",
+          "quantity"
+        ],
+        "title": "LotAvailabilityOut",
+        "type": "object"
+      },
+      "TransitAvailabilityOut": {
+        "description": "One sede's shelf **and its road**, for the item lookup only.\n\n§1 deliverable 11 · units dispatched here and not yet received are on no\nshelf, so they are never in `quantity` and never a state in the `Estado`\ncolumn -- the record panel renders the figure beside the shelf one so the\noffice can tell an empty sede from one whose box is in a van. Kept off the\nplain `AvailabilityOut` because the `Quiebre` clause's `hay 96 en Suba`\ncounts what somebody can put in a customer's hand today, and a row in\ntransit is exactly what they cannot.",
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "in_transit": {
+            "default": 0,
+            "title": "In Transit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "quantity"
+        ],
+        "title": "TransitAvailabilityOut",
+        "type": "object"
+      },
+      "ExpiringLocationOut": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "horizons": {
+            "items": {
+              "$ref": "#/components/schemas/HorizonOut"
+            },
+            "title": "Horizons",
+            "type": "array"
+          },
+          "total_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "horizons",
+          "total_value"
+        ],
+        "title": "ExpiringLocationOut",
+        "type": "object"
+      },
+      "ExpiringOut": {
+        "properties": {
+          "horizons": {
+            "items": {
+              "$ref": "#/components/schemas/HorizonOut"
+            },
+            "title": "Horizons",
+            "type": "array"
+          },
+          "total_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Value",
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/ExpiringLocationOut"
+            },
+            "title": "Locations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "horizons",
+          "total_value",
+          "locations"
+        ],
+        "title": "ExpiringOut",
+        "type": "object"
+      },
+      "HorizonOut": {
+        "properties": {
+          "key": {
+            "enum": [
+              "valuation",
+              "alert",
+              "notice"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          },
+          "lots": {
+            "title": "Lots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "days",
+          "value",
+          "lots"
+        ],
+        "title": "HorizonOut",
+        "type": "object"
+      },
+      "MoveOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "receipt",
+              "sale",
+              "customer_return",
+              "supplier_return",
+              "transfer_out",
+              "transfer_in",
+              "adjustment",
+              "shrinkage",
+              "expiry",
+              "count"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          },
+          "fefo_override": {
+            "title": "Fefo Override",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "item_id",
+          "item_name",
+          "lot_id",
+          "lot_code",
+          "quantity",
+          "type",
+          "reason",
+          "note",
+          "document_type",
+          "document_id",
+          "unit_cost",
+          "occurred_at",
+          "recorded_at",
+          "device_id",
+          "device_label",
+          "user_id",
+          "user_name",
+          "fefo_override"
+        ],
+        "title": "MoveOut",
+        "type": "object"
+      },
+      "Page_MoveOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/MoveOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[MoveOut]",
+        "type": "object"
+      },
+      "MoveIn": {
+        "description": "The only direct write. Three types and nothing else.",
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "adjustment",
+              "shrinkage",
+              "expiry"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "opening_stock",
+              "standalone_receipt",
+              "correction",
+              "damage",
+              "theft",
+              "loss",
+              "expired",
+              "count_adjustment",
+              "negative_resolution"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "client_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Uuid"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "required": [
+          "location_id",
+          "item_id",
+          "quantity",
+          "type",
+          "reason"
+        ],
+        "title": "MoveIn",
+        "type": "object"
+      },
+      "LotOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_code": {
+            "title": "Lot Code",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "supplier_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Id"
+          },
+          "supplier_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Name"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "invima_registration": {
+            "title": "Invima Registration",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "by_location": {
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityOut"
+            },
+            "title": "By Location",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "lot_code",
+          "expires_at",
+          "supplier_id",
+          "supplier_name",
+          "unit_cost",
+          "invima_registration",
+          "total",
+          "by_location"
+        ],
+        "title": "LotOut",
+        "type": "object"
+      },
+      "Page_LotOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LotOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[LotOut]",
+        "type": "object"
+      },
+      "TraceOut": {
+        "properties": {
+          "lot": {
+            "$ref": "#/components/schemas/LotOut"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/TraceRowOut"
+            },
+            "title": "Moves",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lot",
+          "moves"
+        ],
+        "title": "TraceOut",
+        "type": "object"
+      },
+      "TraceRowOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "receipt",
+              "sale",
+              "customer_return",
+              "supplier_return",
+              "transfer_out",
+              "transfer_in",
+              "adjustment",
+              "shrinkage",
+              "expiry",
+              "count"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          },
+          "fefo_override": {
+            "title": "Fefo Override",
+            "type": "boolean"
+          },
+          "balance": {
+            "title": "Balance",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "item_id",
+          "item_name",
+          "lot_id",
+          "lot_code",
+          "quantity",
+          "type",
+          "reason",
+          "note",
+          "document_type",
+          "document_id",
+          "unit_cost",
+          "occurred_at",
+          "recorded_at",
+          "device_id",
+          "device_label",
+          "user_id",
+          "user_name",
+          "fefo_override",
+          "balance"
+        ],
+        "title": "TraceRowOut",
+        "type": "object"
+      },
+      "ReceiptOut": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "lines_written": {
+            "title": "Lines Written",
+            "type": "integer"
+          },
+          "lines_duplicate": {
+            "title": "Lines Duplicate",
+            "type": "integer"
+          },
+          "lines_skipped": {
+            "title": "Lines Skipped",
+            "type": "integer"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/MoveOut"
+            },
+            "title": "Moves",
+            "type": "array"
+          }
+        },
+        "required": [
+          "location_id",
+          "document_id",
+          "lines_written",
+          "lines_duplicate",
+          "lines_skipped",
+          "moves"
+        ],
+        "title": "ReceiptOut",
+        "type": "object"
+      },
+      "ReceiptIn": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReceiptLineIn"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "reason": {
+            "default": "standalone_receipt",
+            "enum": [
+              "opening_stock",
+              "standalone_receipt"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "required": [
+          "location_id",
+          "lines"
+        ],
+        "title": "ReceiptIn",
+        "type": "object"
+      },
+      "ReceiptLineIn": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "lot_code": {
+            "default": "",
+            "title": "Lot Code",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "supplier_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Id"
+          },
+          "client_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Uuid"
+          }
+        },
+        "required": [
+          "item_id",
+          "quantity"
+        ],
+        "title": "ReceiptLineIn",
+        "type": "object"
+      },
+      "Page_TransferOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TransferOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[TransferOut]",
+        "type": "object"
+      },
+      "TransferLineOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "quantity_requested": {
+            "title": "Quantity Requested",
+            "type": "integer"
+          },
+          "quantity_dispatched": {
+            "title": "Quantity Dispatched",
+            "type": "integer"
+          },
+          "quantity_received": {
+            "title": "Quantity Received",
+            "type": "integer"
+          },
+          "in_transit": {
+            "title": "In Transit",
+            "type": "integer"
+          },
+          "resolution": {
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "lot_id",
+          "lot_code",
+          "quantity_requested",
+          "quantity_dispatched",
+          "quantity_received",
+          "in_transit",
+          "resolution"
+        ],
+        "title": "TransferLineOut",
+        "type": "object"
+      },
+      "TransferOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "origin_location_id": {
+            "format": "uuid",
+            "title": "Origin Location Id",
+            "type": "string"
+          },
+          "origin_location_name": {
+            "title": "Origin Location Name",
+            "type": "string"
+          },
+          "destination_location_id": {
+            "format": "uuid",
+            "title": "Destination Location Id",
+            "type": "string"
+          },
+          "destination_location_name": {
+            "title": "Destination Location Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "dispatched",
+              "received",
+              "partial"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "dispatched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatched At"
+          },
+          "dispatched_by_name": {
+            "title": "Dispatched By Name",
+            "type": "string"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
+          "received_by_name": {
+            "title": "Received By Name",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "references": {
+            "title": "References",
+            "type": "integer"
+          },
+          "in_transit": {
+            "title": "In Transit",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/TransferLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "origin_location_id",
+          "origin_location_name",
+          "destination_location_id",
+          "destination_location_name",
+          "status",
+          "dispatched_at",
+          "dispatched_by_name",
+          "received_at",
+          "received_by_name",
+          "note",
+          "references",
+          "in_transit",
+          "lines"
+        ],
+        "title": "TransferOut",
+        "type": "object"
+      },
+      "TransferIn": {
+        "properties": {
+          "origin_location_id": {
+            "format": "uuid",
+            "title": "Origin Location Id",
+            "type": "string"
+          },
+          "destination_location_id": {
+            "format": "uuid",
+            "title": "Destination Location Id",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/TransferLineIn"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "origin_location_id",
+          "destination_location_id",
+          "lines"
+        ],
+        "title": "TransferIn",
+        "type": "object"
+      },
+      "TransferLineIn": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "quantity_requested": {
+            "title": "Quantity Requested",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "item_id",
+          "quantity_requested"
+        ],
+        "title": "TransferLineIn",
+        "type": "object"
+      },
+      "TransferPatchIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransferLineIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          }
+        },
+        "title": "TransferPatchIn",
+        "type": "object"
+      },
+      "DispatchIn": {
+        "properties": {
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MovementLineIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          }
+        },
+        "title": "DispatchIn",
+        "type": "object"
+      },
+      "MovementLineIn": {
+        "properties": {
+          "line_id": {
+            "format": "uuid",
+            "title": "Line Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "line_id",
+          "quantity"
+        ],
+        "title": "MovementLineIn",
+        "type": "object"
+      },
+      "ResolveIn": {
+        "properties": {
+          "line_id": {
+            "format": "uuid",
+            "title": "Line Id",
+            "type": "string"
+          },
+          "resolution": {
+            "enum": [
+              "received_late",
+              "lost_in_transit"
+            ],
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "line_id",
+          "resolution"
+        ],
+        "title": "ResolveIn",
+        "type": "object"
+      },
+      "CountDueOut": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "last_closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed At"
+          },
+          "due": {
+            "title": "Due",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "last_closed_at",
+          "due"
+        ],
+        "title": "CountDueOut",
+        "type": "object"
+      },
+      "CountLineOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "expected_quantity": {
+            "title": "Expected Quantity",
+            "type": "integer"
+          },
+          "counted_quantity": {
+            "title": "Counted Quantity",
+            "type": "integer"
+          },
+          "difference": {
+            "title": "Difference",
+            "type": "integer"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "entered_at": {
+            "format": "date-time",
+            "title": "Entered At",
+            "type": "string"
+          },
+          "resolves_negative": {
+            "title": "Resolves Negative",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "lot_id",
+          "lot_code",
+          "expected_quantity",
+          "counted_quantity",
+          "difference",
+          "unit_cost",
+          "entered_at",
+          "resolves_negative"
+        ],
+        "title": "CountLineOut",
+        "type": "object"
+      },
+      "CountOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "full",
+              "category",
+              "item_list"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "counting",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "counted_by_name": {
+            "title": "Counted By Name",
+            "type": "string"
+          },
+          "closed_by_name": {
+            "title": "Closed By Name",
+            "type": "string"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "lines_count": {
+            "title": "Lines Count",
+            "type": "integer"
+          },
+          "differences": {
+            "title": "Differences",
+            "type": "integer"
+          },
+          "difference_value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Difference Value",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CountLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "negatives": {
+            "items": {
+              "$ref": "#/components/schemas/NegativeOut"
+            },
+            "title": "Negatives",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "scope",
+          "category_id",
+          "category_name",
+          "status",
+          "counted_by_name",
+          "closed_by_name",
+          "closed_at",
+          "recorded_at",
+          "lines_count",
+          "differences",
+          "difference_value",
+          "lines",
+          "negatives"
+        ],
+        "title": "CountOut",
+        "type": "object"
+      },
+      "CountPage": {
+        "description": "The list, **with the locations whose `count_cadence_days` has elapsed\nflagged as due** -- which is what the API surface asks this path for.\n\nIt rides on the list's own envelope rather than on a second path, for the\nsame reason `action_required` rides on Existencias': the due set is what the\nlist is *for*, and a screen that had to ask twice would render its own\nheading before it knew what to put in it.",
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CountOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "due_locations": {
+            "items": {
+              "$ref": "#/components/schemas/CountDueOut"
+            },
+            "title": "Due Locations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size",
+          "due_locations"
+        ],
+        "title": "CountPage",
+        "type": "object"
+      },
+      "NegativeOut": {
+        "description": "One open negative-stock exception at this count's sede.\n\n§5 rule 2 raises the oversell to the office and **this screen is where it is\nresolved** -- so a count carries the sede's open exceptions whether or not\nanybody has counted that reference yet. Reading them off the count is what\nmakes them reachable: a negative raised by a direct movement, a transfer\nreceipt or the opening-stock command has no device behind it, so the\ndevice-scoped arrival queue on S2's own screen never shows it.",
+        "properties": {
+          "conflict_id": {
+            "format": "uuid",
+            "title": "Conflict Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "counted": {
+            "title": "Counted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "conflict_id",
+          "item_id",
+          "item_name",
+          "lot_id",
+          "lot_code",
+          "quantity",
+          "recorded_at",
+          "counted"
+        ],
+        "title": "NegativeOut",
+        "type": "object"
+      },
+      "CountIn": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "scope": {
+            "default": "full",
+            "enum": [
+              "full",
+              "category",
+              "item_list"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "client_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Uuid"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "required": [
+          "location_id"
+        ],
+        "title": "CountIn",
+        "type": "object"
+      },
+      "CountLineIn": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "counted_quantity": {
+            "title": "Counted Quantity",
+            "type": "integer"
+          },
+          "client_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Uuid"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          }
+        },
+        "required": [
+          "item_id",
+          "counted_quantity"
+        ],
+        "title": "CountLineIn",
+        "type": "object"
+      },
+      "CountLinesIn": {
+        "properties": {
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/CountLineIn"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines"
+        ],
+        "title": "CountLinesIn",
+        "type": "object"
+      },
+      "Page_PolicyOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[PolicyOut]",
+        "type": "object"
+      },
+      "PolicyOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Quantity"
+          },
+          "max_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Quantity"
+          },
+          "reorder_point": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reorder Point"
+          },
+          "target_coverage_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Coverage Days"
+          },
+          "source": {
+            "enum": [
+              "manual",
+              "model"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "location_id",
+          "location_name",
+          "min_quantity",
+          "max_quantity",
+          "reorder_point",
+          "target_coverage_days",
+          "source"
+        ],
+        "title": "PolicyOut",
+        "type": "object"
+      },
+      "PolicyIn": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "min_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Quantity"
+          },
+          "max_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Quantity"
+          },
+          "reorder_point": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reorder Point"
+          },
+          "target_coverage_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Coverage Days"
+          }
+        },
+        "required": [
+          "item_id"
+        ],
+        "title": "PolicyIn",
+        "type": "object"
+      },
+      "PolicyWriteIn": {
+        "description": "One item or many, **always at `source = manual`**.\n\nA write over a `model` row is accepted and flips `source` back -- that is the\npoint of the column, and it is what stops S6 quietly overwriting a threshold\nsomebody set on purpose.",
+        "properties": {
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyIn"
+            },
+            "title": "Policies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "policies"
+        ],
+        "title": "PolicyWriteIn",
+        "type": "object"
+      },
+      "InventorySettingsOut": {
+        "properties": {
+          "expiry_valuation_days": {
+            "title": "Expiry Valuation Days",
+            "type": "integer"
+          },
+          "expiry_alert_days": {
+            "title": "Expiry Alert Days",
+            "type": "integer"
+          },
+          "expiry_notice_days": {
+            "title": "Expiry Notice Days",
+            "type": "integer"
+          },
+          "fefo_override_policy": {
+            "title": "Fefo Override Policy",
+            "type": "string"
+          },
+          "negative_stock_block_outbound": {
+            "title": "Negative Stock Block Outbound",
+            "type": "boolean"
+          },
+          "count_cadence_days": {
+            "title": "Count Cadence Days",
+            "type": "integer"
+          },
+          "expiry_digest_recipients": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Expiry Digest Recipients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "expiry_valuation_days",
+          "expiry_alert_days",
+          "expiry_notice_days",
+          "fefo_override_policy",
+          "negative_stock_block_outbound",
+          "count_cadence_days",
+          "expiry_digest_recipients"
+        ],
+        "title": "InventorySettingsOut",
+        "type": "object"
+      },
+      "InventorySettingsIn": {
+        "properties": {
+          "expiry_valuation_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Valuation Days"
+          },
+          "expiry_alert_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Alert Days"
+          },
+          "expiry_notice_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Notice Days"
+          },
+          "negative_stock_block_outbound": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Stock Block Outbound"
+          },
+          "count_cadence_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count Cadence Days"
+          },
+          "expiry_digest_recipients": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Digest Recipients"
+          }
+        },
+        "title": "InventorySettingsIn",
         "type": "object"
       }
     },

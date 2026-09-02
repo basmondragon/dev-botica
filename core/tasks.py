@@ -139,3 +139,4 @@ def enqueue_invitation_email(invitation, token):
 # thing somebody can read in one place.
 from core.catalog import jobs  # noqa: E402,F401  -- registers S1's INVIMA sweep
 from core.sync import jobs as sync_jobs  # noqa: E402,F401  -- S2's stale-device check
+from core.inventory import jobs as inventory_jobs  # noqa: E402,F401  -- S3's three

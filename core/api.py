@@ -888,3 +888,36 @@ api.add_router("", catalog_router)
 from core.sync.api import router as sync_router  # noqa: E402
 
 api.add_router("", sync_router)
+
+
+# ---------------------------------------------------------------------------
+# S3 · inventory
+#
+# The same rule again: a Router, not a second schema. Its paths already read
+# `/stock`, `/stock-moves`, `/lots`, `/receipts`, `/transfers`, `/stock-counts`,
+# `/stock-policies` and `/settings/inventory`, so the prefix is empty here too.
+#
+# Importing `core.inventory.api` pulls in the package, which registers this
+# stage's two push writers with S2's endpoint -- so a receipt line arriving from
+# a till that was offline goes through the ledger service and not around it.
+# ---------------------------------------------------------------------------
+
+from core.inventory.api import LineRefused, router as inventory_router  # noqa: E402
+
+api.add_router("", inventory_router)
+
+
+@api.exception_handler(LineRefused)
+def _line_refused(request, exc):
+    """One refused line of a multi-line entry, at field scope (§B.10.3).
+
+    The body is the ordinary `detail` every other refusal carries, plus the two
+    facts that let a surface put the message on the control instead of at the
+    foot of the page. A client that ignores them still renders a correct
+    region-scope error, which is what keeps this additive.
+    """
+    return api.create_response(
+        request,
+        {"detail": exc.detail, "line": exc.line, "field": exc.field},
+        status=422,
+    )

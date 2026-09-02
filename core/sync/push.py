@@ -460,5 +460,25 @@ def _write_customer(device, collection, row, client_uuid, options):
 
 
 #: One writer per pushable collection. A collection with no entry takes rule 8's
-#: first form, which is what S3's and S4's tables will do.
+#: first form -- dedupe on `(tenant_id, client_uuid)` and insert the payload as
+#: it stands.
+#:
+#: **A collection whose write has consequences beyond its own row registers
+#: one.** S3's two do: a receipt line creates or matches a `lots` row and
+#: appends through the ledger service, and a count line stamps the projection as
+#: it stands at entry. Rule 8's first form would insert a `stock_moves` row
+#: without maintaining the projection, which is the one thing rule 7 forbids
+#: outright -- so the extension point is here, and the writers themselves live
+#: in the stage that owns the rules they encode.
 WRITERS = {"customers": _write_customer}
+
+
+def register_writer(name, writer):
+    """Register one collection's writer. Called once per collection, at import."""
+    if name in WRITERS:
+        raise RuntimeError(
+            f"A push writer for {name!r} is already registered. One collection, "
+            "one writer."
+        )
+    WRITERS[name] = writer
+    return writer

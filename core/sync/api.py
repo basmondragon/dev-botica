@@ -326,12 +326,12 @@ def sync_pull(
     device = device_service.resolve(request)
     options = _options(request)
     try:
-        target = registry.get(collection)
+        target = registry.pullable(collection)
     except LookupError as refusal:
         raise HttpError(
             422,
-            f"«{collection}» no es una colección sincronizable. El registro "
-            "declara: " + ", ".join(registry.BY_NAME),
+            f"«{collection}» no es una colección que este equipo descargue. El "
+            "registro declara: " + ", ".join(one.name for one in registry.COLLECTIONS),
         ) from refusal
 
     page_size = int(options["pull_page_size"])

@@ -1,5 +1,5 @@
 import type { SyncDatabase } from "./store";
-import type { CustomerDoc, ItemDoc, PriceDoc } from "./registry";
+import type { BarcodeDoc, CustomerDoc, ItemDoc, PriceDoc } from "./registry";
 import { businessDay } from "@/ui/format";
 import { queue, uuidV7 } from "./outbox";
 
@@ -206,4 +206,97 @@ export async function registerCustomer(
     throw failure;
   }
   return document;
+}
+
+/**
+ * Queue one entry of `Cargar mercancía` from a till that is offline.
+ *
+ * **Merchandise arrives whether or not the internet is up**, and a box that
+ * cannot be received is a box that gets sold from while being invisible. Each
+ * line carries its own `client_uuid`, so the server dedupes on it and a push
+ * that timed out after the server committed is a no-op on replay (A5).
+ *
+ * The lot travels as its **natural key** -- code and expiry -- rather than as a
+ * row: `lots` is not a till-written table (ledger rule 8), and the server
+ * creates or matches it inside the pinned push transaction.
+ *
+ * **Nothing is written to the local stock collections here.** They are a
+ * snapshot of server state, and a till that added its own pending receipt to
+ * them would be inventing a quantity -- which is exactly what §5 rule 1
+ * forbids. The projection follows when the push lands.
+ */
+export async function queueReceiptLines(
+  database: SyncDatabase,
+  documentId: string,
+  lines: {
+    item_id: string;
+    lot_code: string;
+    expires_at: string | null;
+    quantity: number;
+    unit_cost: string | null;
+  }[],
+): Promise<number> {
+  for (const line of lines) {
+    // **The outbox row's own `client_uuid` is the line's key**, minted by
+    // `queue` as a uuid v7 -- one key per line and not two, so the server
+    // dedupes on the same value the outbox retries under. The document id is
+    // the entry's, shared by every line of it, so the moves the push writes
+    // hang off one `receipts` document exactly as the online path's do.
+    await queue(database, "receipt_lines", {
+      ...line,
+      document_id: documentId,
+      reason: "standalone_receipt",
+    });
+  }
+  return lines.length;
+}
+
+/**
+ * A scan, resolved from the local store — **the half of `Cargar mercancía` that
+ * makes it offline-capable.**
+ *
+ * Acceptance 19 pulls the cable and expects the surface to keep accepting
+ * scans. A resolution that goes to the server cannot: merchandise arrives
+ * whether or not the internet is up, and a box that cannot be received is a box
+ * that gets sold from while being invisible.
+ *
+ * `item_barcodes` is in the registry with an index on `code`, so this is one
+ * indexed lookup and then one more by id — the same path §4 budgets at 50 ms
+ * for a counter scan, and there is no second implementation of it.
+ */
+export async function scanBarcode(
+  database: SyncDatabase,
+  code: string,
+): Promise<ItemDoc | null> {
+  const scanned = code.trim();
+  if (!scanned) return null;
+  const barcode = (await database.collections
+    .item_barcodes!.findOne({ selector: { code: scanned } })
+    .exec()) as unknown as BarcodeDoc | null;
+  if (!barcode) return null;
+  const item = (await database.collections
+    .items!.findOne(barcode.item_id)
+    .exec()) as unknown as ItemDoc | null;
+  return item ?? null;
+}
+
+/**
+ * Queue one counted line from a till walked around a back room.
+ *
+ * **The count itself is created online** — the list view needs the network
+ * anyway — and its lines queue against that document's id. `expected_quantity`
+ * is stamped by the server when the batch lands, which is the same rule the
+ * online path follows: the line is entered when it is entered, and the
+ * arithmetic between the stamp and the close is the server's.
+ */
+export async function queueCountLine(
+  database: SyncDatabase,
+  line: {
+    count_id: string;
+    item_id: string;
+    lot_id: string | null;
+    counted_quantity: number;
+  },
+): Promise<void> {
+  await queue(database, "stock_count_lines", { ...line });
 }

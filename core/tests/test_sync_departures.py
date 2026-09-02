@@ -184,6 +184,20 @@ DECLARED_HARD_DELETES = {
     # withdrawn row itself lingers.
     ("core/catalog/api.py", "withdraw_price"),
     ("core/catalog/prices.py", "withdraw_price"),
+    # S3 · the projection rebuild removes every key the ledger no longer
+    # produces. **On an append-only ledger that set is always empty**: a key
+    # exists because a movement created it, and no path removes a movement. It
+    # is written anyway because a rebuild that could not remove a key would be a
+    # rebuild that cannot repair the one failure it exists for -- a projection
+    # row nothing in the ledger can produce.
+    ("core/inventory/ledger.py", "rebuild"),
+    # S3 · a `draft` transfer's lines are replaced wholesale on every edit, the
+    # same shape S1's barcode editor takes. **`transfer_lines` is not a registry
+    # collection and never reaches a till**; the function is declared because it
+    # names `Item` while resolving each line, which is what the guard below
+    # looks for, and narrowing the guard to the model actually deleted would
+    # make it miss the case it is really for.
+    ("core/inventory/api.py", "_write_lines"),
 }
 
 #: The models whose tables are in the sync registry. A `.delete()` in a function
@@ -195,6 +209,16 @@ REGISTRY_MODELS = {
     "Category",
     "ItemPrice",
     "Customer",
+    # S3's amendment (rule 9). `StockMove` and `StockCountLine` are the two
+    # write-only collections: a till sends them and never reads them back, so a
+    # delete could not strand a row on one -- they are listed anyway, because
+    # the point of this set is that a stage cannot add a table a device touches
+    # without the guard noticing.
+    "Lot",
+    "StockOnHand",
+    "StockPolicy",
+    "StockMove",
+    "StockCountLine",
 }
 
 
@@ -335,6 +359,25 @@ def test_every_registry_collection_leaves_by_an_update_or_is_declared():
         "categories": "never leaves — the whole table is the predicate",
         "item_prices": "effective_to",
         "customers": "the recency window, repaired by the digest",
+        # S3 · the three the till reads, and the two it only ever writes.
+        "stock_on_hand": "never leaves — the sede's own rows are the predicate",
+        "stock_policies": (
+            "never leaves — this sede's thresholds and the network's are the predicate"
+        ),
+        "lots": (
+            "the join through stock_on_hand: a lot the sede stops holding falls "
+            "out of the predicate rather than being served as a departure, and "
+            "the digest repairs it within a day — the same shape customers takes"
+        ),
+        "stock_elsewhere": (
+            "the trouble set: a reference this sede stops being short of leaves "
+            "the predicate, and the digest repairs it within a day. Widening the "
+            "scope so a departure could be served would mean scanning every "
+            "other sede's stock on every pull, which is the A4 failure the "
+            "predicate exists to prevent"
+        ),
+        "receipt_lines": "write-only — a device sends it and never reads it back",
+        "stock_count_lines": ("write-only — a device sends it and never reads it back"),
     }
     assert set(departure) == set(registry.BY_NAME), (
         "a collection was added to the registry without saying how a row leaves "

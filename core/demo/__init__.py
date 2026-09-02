@@ -36,3 +36,9 @@ from core.catalog import demo as catalog  # noqa: E402,F401  -- registers "catal
 # S2's fixture: the tills. It requires "identity" for `locations` and is what
 # S4's fixture will hang its sales on.
 from core.sync import demo as sync  # noqa: E402,F401  -- registers "devices"
+
+# S3's fixture: the lots, the moves and the thresholds behind Existencias, plus
+# the transfers and counts that keep the module's other three routes off their
+# empty states. **It contributes no `stock_on_hand` rows** -- it moves stock
+# through the ledger service and lets the projection follow.
+from core.inventory import demo as inventory  # noqa: E402,F401  -- "stock"

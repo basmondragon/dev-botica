@@ -2,9 +2,12 @@ import { replicateRxCollection } from "rxdb/plugins/replication";
 import type { RxReplicationState } from "rxdb/plugins/replication";
 import {
   COLLECTIONS,
+  STREAMS,
+  belongsTo,
+  storeOf,
   LOCATION_SCOPED,
   REGISTRY_VERSION,
-  type CollectionName,
+  type StreamName,
 } from "./registry";
 import type { DeviceRecord } from "./device";
 import { writeDevice } from "./device";
@@ -52,7 +55,7 @@ export interface EngineSnapshot {
   storagePersisted: boolean | null;
   device: DeviceRecord;
   /** The collection currently downloading, for the first-sync card's line. */
-  syncing: CollectionName | null;
+  syncing: StreamName | null;
   lastError: string;
   /** §B.10.3 · the correlation id of the last refusal, so an error a cashier
    *  reports has something a support engineer can chase. */
@@ -131,7 +134,7 @@ function writeEpochs(epochs: Record<string, number>) {
 export class SyncEngine {
   private listeners = new Set<Listener>();
   private replications = new Map<
-    CollectionName,
+    StreamName,
     RxReplicationState<never, unknown>
   >();
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -152,7 +155,7 @@ export class SyncEngine {
    * thing that says so.
    */
   private waiters = new Map<
-    CollectionName,
+    StreamName,
     { resolve: () => void; reject: (failure: unknown) => void }[]
   >();
   private compactionTimer: ReturnType<typeof setInterval> | null = null;
@@ -262,7 +265,7 @@ export class SyncEngine {
       SHARED_REFRESH_MS,
     );
 
-    for (const name of COLLECTIONS) {
+    for (const name of STREAMS) {
       this.replications.set(name, this.replicate(name));
     }
 
@@ -305,9 +308,12 @@ export class SyncEngine {
     });
   }
 
-  private replicate(name: CollectionName) {
+  private replicate(name: StreamName) {
     const epoch = readEpochs()[name] ?? 0;
-    const collection = this.database.collections[name]!;
+    // The store a stream lands in. `stock_elsewhere` shares `stock_on_hand`'s;
+    // the two keep separate cursors, epochs and digests because they are
+    // separate predicates over separate scans.
+    const collection = this.database.collections[storeOf(name)]!;
     return replicateRxCollection({
       collection,
       // The epoch is what makes a reset deterministic: a new identifier has no
@@ -408,7 +414,7 @@ export class SyncEngine {
       writeLocal(VERSION_KEY, String(REGISTRY_VERSION));
       return;
     }
-    for (const name of COLLECTIONS) {
+    for (const name of STREAMS) {
       if (!(await this.reset(name))) {
         this.emit({ degraded: "outdated" });
         return;
@@ -449,7 +455,7 @@ export class SyncEngine {
    * the single failure this whole stage exists to prevent, and it would arrive
    * as a deployment side effect rather than as anything a cashier did.
    */
-  async reset(name: CollectionName): Promise<boolean> {
+  async reset(name: StreamName): Promise<boolean> {
     if ((await outbox.depth(this.database)) > 0) {
       try {
         await this.push();
@@ -467,9 +473,22 @@ export class SyncEngine {
     const epochs = readEpochs();
     epochs[name] = (epochs[name] ?? 0) + 1;
     writeEpochs(epochs);
-    const held = await this.database.collections[name]!.find().exec();
-    await this.database.collections[name]!.bulkRemove(
-      held.map((document) => document.primary),
+    // **Only this stream's rows.** Where two streams share a store, wiping the
+    // whole store would take the other stream's documents with it while its
+    // cursor stayed where it was -- so it would never re-serve them and the
+    // till would sit on a hole until the next daily digest.
+    const store = this.database.collections[storeOf(name)]!;
+    const held = await store.find().exec();
+    await store.bulkRemove(
+      held
+        .filter((document) =>
+          belongsTo(
+            name,
+            document.toJSON() as { location_id?: string | null },
+            this.device.location_id,
+          ),
+        )
+        .map((document) => document.primary),
     );
     const progress = { ...this.snapshot.progress };
     if (progress[name]) progress[name] = { ...progress[name], received: 0 };
@@ -624,7 +643,7 @@ export class SyncEngine {
     }
   }
 
-  private settle(name: CollectionName, failure: unknown | null) {
+  private settle(name: StreamName, failure: unknown | null) {
     const held = this.waiters.get(name);
     if (!held || held.length === 0) return;
     this.waiters.set(name, []);
@@ -642,7 +661,7 @@ export class SyncEngine {
    * status line freezes on whatever it last said, which is worse than a wrong
    * line because nothing about it looks wrong.
    */
-  private nextPage(name: CollectionName) {
+  private nextPage(name: StreamName) {
     const ceiling = Math.max(3 * this.interval(), POLL_CEILING_MS / 2);
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(
@@ -870,10 +889,14 @@ export class SyncEngine {
     if (now - last < DIGEST_INTERVAL_MS) return;
     try {
       const answer = await fetchDigest(this.device);
-      for (const name of COLLECTIONS) {
+      for (const name of STREAMS) {
         const remote = answer.collections[name];
         if (!remote) continue;
-        const local = await localDigest(this.database, name);
+        const local = await localDigest(
+          this.database,
+          name,
+          this.device.location_id,
+        );
         // **Both halves.** The count catches a row that arrived or left without
         // a departure being serveable — a hard delete, a window that aged out.
         // The checksum catches the one the count cannot: a row rewritten inside

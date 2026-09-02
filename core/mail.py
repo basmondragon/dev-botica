@@ -86,3 +86,29 @@ def send_invitation(
             "expires_at": expires_at,
         },
     )
+
+
+def send_expiry_digest(
+    *, email, tenant_name, location_name, horizon_days, lines, run_date
+):
+    """What is expiring at one sede, to whoever asked to be told.
+
+    **It reports and never acts.** §12 fixes that Botica surfaces the state and
+    records the pharmacy's decision, so this message names lots and quantities
+    and asks a person to decide -- there is no link in it that writes anything
+    off.
+    """
+    expired = [line for line in lines if line["expired"]]
+    return _send(
+        "expiry_digest",
+        email,
+        f"{tenant_name} · {location_name}: {len(lines)} lotes por vencer",
+        {
+            "tenant_name": tenant_name,
+            "location_name": location_name,
+            "horizon_days": horizon_days,
+            "lines": lines,
+            "expired_count": len(expired),
+            "run_date": run_date,
+        },
+    )

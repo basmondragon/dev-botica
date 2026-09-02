@@ -12,8 +12,12 @@ import {
   type ItemType,
 } from "@/api/catalog";
 import { useLocations, type Me } from "@/api/queries";
-import { Segmented } from "@/ui/segmented";
-import { FilterBar, FilterChip, SearchField } from "@/ui/filter-bar";
+import {
+  ChipOptions,
+  FilterBar,
+  FilterChip,
+  SearchField,
+} from "@/ui/filter-bar";
 import { count, money } from "@/ui/format";
 import { Content, TableContent, TopBar, TopBarButton } from "@/shell/shell";
 import { Badge, INVIMA_STATUS } from "@/ui/status";
@@ -22,6 +26,7 @@ import { EmptyState, ProgressLine, RouteError } from "@/ui/states";
 import { useListKeys } from "@/ui/use-list-keys";
 import { routeGrid } from "@/ui/use-grid";
 import { useDebounced } from "@/ui/use-debounced";
+import { InventoryBreadcrumb } from "@/inventory/breadcrumb";
 import { ItemPanel } from "./item-panel";
 import { INVIMA_LABEL, ITEM_TYPE } from "./vocabulary";
 
@@ -546,66 +551,24 @@ function Dash() {
 }
 
 function Header({ me, onNew }: { me: Me; onNew: () => void }) {
-  const navigate = useNavigate();
   return (
     <TopBar
-      breadcrumb={["Inventario"]}
+      // S3 · **the module is one nav item and five routes**, and the header
+      // breadcrumb's first segment is the menu that moves between them
+      // (§B.8.1). The one-segment control that stood here at S1 was a
+      // placeholder for exactly this, and the drawn Existencias header already
+      // carries two buttons -- a third control would crowd them.
+      breadcrumb={<InventoryBreadcrumb />}
       title="Catálogo"
       actions={
-        <>
-          <Segmented
-            label="Vista de inventario"
-            value="catalog"
-            segments={[
-              // S3 adds `Existencias` here and takes the landing route.
-              { value: "catalog", label: "Catálogo" },
-            ]}
-            onChange={() =>
-              void navigate({
-                to: "/inventory/catalog",
-                search: (previous: CatalogSearch) => previous,
-              })
-            }
-          />
-          {/* §B.8.3 · a `cashier` reaches the grid read-only. The action is
-           **not rendered**, never rendered disabled. */}
-          {me.role !== "cashier" ? (
-            <TopBarButton variant="primary" onClick={onNew}>
-              Nuevo producto
-            </TopBarButton>
-          ) : null}
-        </>
+        /* §B.8.3 · a `cashier` reaches the grid read-only. The action is
+         **not rendered**, never rendered disabled. */
+        me.role !== "cashier" ? (
+          <TopBarButton variant="primary" onClick={onNew}>
+            Nuevo producto
+          </TopBarButton>
+        ) : null
       }
     />
-  );
-}
-
-function ChipOptions({
-  options,
-  value,
-  onPick,
-}: {
-  options: { value: string; label: string }[];
-  value: string;
-  onPick: (next: string) => void;
-}) {
-  return (
-    <div className="max-h-64 overflow-y-auto">
-      {options.map((option) => (
-        <button
-          key={option.value || "todos"}
-          type="button"
-          aria-pressed={option.value === value}
-          onClick={() => onPick(option.value)}
-          className={
-            "flex h-8 w-full items-center rounded-control px-2.5 text-left text-12 " +
-            "transition-colors duration-140 ease-out hover:bg-hover-row " +
-            (option.value === value ? "font-medium text-ink" : "text-ink-body")
-          }
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
   );
 }

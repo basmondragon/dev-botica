@@ -200,7 +200,10 @@ export function Modal({
 }: {
   open: boolean;
   title: string;
-  size?: "confirm" | "form";
+  /** `confirm` 560 · `form` 720 · `wide` 1040, for a modal whose content is a
+   *  table rather than a form -- a trace clipped at its last column is a trace
+   *  that answers the wrong question. */
+  size?: "confirm" | "form" | "wide";
   busy?: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -228,7 +231,11 @@ export function Modal({
         }}
         className={cn(
           "max-w-full rounded-card border border-edge-soft bg-surface shadow-overlay",
-          size === "confirm" ? "w-[560px]" : "w-[720px]",
+          size === "confirm"
+            ? "w-[560px]"
+            : size === "wide"
+              ? "w-[1040px]"
+              : "w-[720px]",
         )}
       >
         <div className="p-5">

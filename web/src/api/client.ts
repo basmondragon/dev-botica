@@ -32,6 +32,12 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly requestId?: string,
+    /** §B.10.3 · which line of a multi-line entry was refused, and which
+     *  control on it. Present only where the endpoint says so; a caller that
+     *  ignores both still renders a correct region-scope error, which is what
+     *  keeps the pair additive. */
+    readonly line?: number,
+    readonly field?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -53,10 +59,14 @@ export function toApiError(
     typeof body.detail === "string"
       ? body.detail
       : fallback;
+  const scoped =
+    body && typeof body === "object" ? (body as Record<string, unknown>) : {};
   return new ApiError(
     detail,
     response.status,
     response.headers.get("x-request-id") ?? undefined,
+    typeof scoped.line === "number" ? scoped.line : undefined,
+    typeof scoped.field === "string" ? scoped.field : undefined,
   );
 }
 

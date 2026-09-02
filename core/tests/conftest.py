@@ -41,8 +41,12 @@ def django_db_setup(django_db_setup, django_db_blocker):
         cursor.execute(
             f'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "{runtime}"'
         )
-        # audit_log stays append-only here too, or the grant test proves nothing.
+        # `audit_log` and `stock_moves` stay append-only here too, or the grant
+        # tests prove nothing. Both are revokes in a migration; the test
+        # database is created from the same migrations but inherits the schema
+        # grants above, so the two have to be re-applied by name.
         cursor.execute(f'REVOKE UPDATE, DELETE ON audit_log FROM "{runtime}"')
+        cursor.execute(f'REVOKE UPDATE, DELETE ON stock_moves FROM "{runtime}"')
     return django_db_setup
 
 

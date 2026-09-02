@@ -297,29 +297,40 @@ function UserFooter({ me, collapsed }: { me: Me; collapsed: boolean }) {
   );
 }
 
-/** §A.13.2 · 64px sticky, `padding:0 40px`, exactly one `t-28` title. */
+/**
+ * §A.13.2 · 64px sticky, `padding:0 40px`, exactly one `t-28` title.
+ *
+ * `breadcrumb` takes plain segments, or a node where a module puts a **menu**
+ * in the first one (§B.8.1): the crumb is already drawn at 12px `#727272` and
+ * giving it a job is what lets a module hold four routes behind one nav item
+ * without an eighth item in a list a cashier uses all day.
+ */
 export function TopBar({
   breadcrumb,
   title,
   actions,
 }: {
-  breadcrumb: string[];
+  breadcrumb: string[] | ReactNode;
   title: string;
   actions?: ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-4 border-b border-hairline bg-nav-veil px-10 backdrop-blur-[14px]">
       <div className="flex min-w-0 items-baseline gap-2">
-        {breadcrumb.length > 0 ? (
-          <p className="flex shrink-0 items-center gap-1 text-12 text-ink-label">
-            {breadcrumb.map((crumb) => (
-              <span key={crumb} className="flex items-center gap-1">
-                {crumb}
-                <span className="text-ink-disabled">/</span>
-              </span>
-            ))}
-          </p>
-        ) : null}
+        {Array.isArray(breadcrumb) ? (
+          breadcrumb.length > 0 ? (
+            <p className="flex shrink-0 items-center gap-1 text-12 text-ink-label">
+              {breadcrumb.map((crumb) => (
+                <span key={crumb} className="flex items-center gap-1">
+                  {crumb}
+                  <span className="text-ink-disabled">/</span>
+                </span>
+              ))}
+            </p>
+          ) : null
+        ) : (
+          breadcrumb
+        )}
         <h1 className="truncate text-28 tracking-display text-ink">{title}</h1>
       </div>
       <div className="ml-auto flex items-center gap-2">{actions}</div>

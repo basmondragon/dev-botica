@@ -154,3 +154,95 @@ export function FilterChip({
     </div>
   );
 }
+
+/**
+ * The option list inside a chip's menu: a single choice, with the current one
+ * carried in weight rather than in a tick, because a chip that is set already
+ * says so in its own value pill.
+ */
+export function ChipOptions({
+  options,
+  value,
+  onPick,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onPick: (next: string) => void;
+}) {
+  return (
+    <div className="max-h-64 overflow-y-auto">
+      {options.map((option) => (
+        <button
+          key={option.value || "todos"}
+          type="button"
+          aria-pressed={option.value === value}
+          onClick={() => onPick(option.value)}
+          className={cn(
+            "flex h-8 w-full items-center rounded-control px-2.5 text-left text-12",
+            "transition-colors duration-140 ease-out hover:bg-hover-row",
+            option.value === value ? "font-medium text-ink" : "text-ink-body",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * §A.21 · **`Sede` is multi-select**, which is the one chip the handoff says so
+ * about. The menu stays open while values are toggled, because closing it after
+ * each pick would make choosing three sedes three trips.
+ */
+export function ChipToggles({
+  options,
+  selected,
+  onChange,
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const chosen = new Set(selected);
+  return (
+    <div className="max-h-64 overflow-y-auto">
+      <button
+        type="button"
+        aria-pressed={chosen.size === 0}
+        onClick={() => onChange([])}
+        className={cn(
+          "flex h-8 w-full items-center rounded-control px-2.5 text-left text-12",
+          "transition-colors duration-140 ease-out hover:bg-hover-row",
+          chosen.size === 0 ? "font-medium text-ink" : "text-ink-body",
+        )}
+      >
+        Todas
+      </button>
+      {options.map((option) => (
+        <label
+          key={option.value}
+          className={cn(
+            "flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-control px-2.5 text-12",
+            "transition-colors duration-140 ease-out hover:bg-hover-row",
+            chosen.has(option.value) ? "font-medium text-ink" : "text-ink-body",
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={chosen.has(option.value)}
+            onChange={(event) =>
+              onChange(
+                event.currentTarget.checked
+                  ? [...selected, option.value]
+                  : selected.filter((one) => one !== option.value),
+              )
+            }
+            className="size-3.5 accent-ink"
+          />
+          {option.label}
+        </label>
+      ))}
+    </div>
+  );
+}

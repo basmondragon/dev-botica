@@ -47,13 +47,22 @@ from core.models import (
     Item,
     ItemBarcode,
     ItemPrice,
+    Lot,
     Manufacturer,
+    StockCountLine,
+    StockMove,
+    StockOnHand,
+    StockPolicy,
 )
 
 #: Bumped whenever a collection is added, removed, or its document shape
 #: changes. Every pull response carries it; a client behind the server enters
 #: `degraded · versión desactualizada` and reloads the application shell.
-REGISTRY_VERSION = 1
+#:
+#: **2 · S3's amendment** (rule 9): four collections a till reads --
+#: `stock_on_hand`, `stock_elsewhere`, `lots` and `stock_policies` -- and two it
+#: only ever writes, `receipt_lines` and `stock_count_lines`.
+REGISTRY_VERSION = 2
 
 TENANT_WIDE = "tenant"
 LOCATION_SCOPED = "location"
@@ -105,6 +114,13 @@ class Collection:
     #: second indexed lookup over at most `limit` primary keys, rather than by
     #: putting a join in the scan the budget is measured on.
     enrich: Callable[[list[dict]], None] | None = None
+    #: Whether a device may **read** it. Every S2 collection does; S3 adds the
+    #: first two that a till writes and never pulls -- a receipt line and a
+    #: counted line are events, and the till already knows what it sent. A
+    #: push-only collection is absent from the digest, from the first-sync
+    #: card's totals and from `GET /api/sync/pull`, because each of the three
+    #: asks a question about a snapshot and an event log is not one.
+    pull: bool = True
 
     def base(self, tenant_id, location_id, options):
         """The queryset every read of this collection starts from."""
@@ -417,9 +433,218 @@ CUSTOMERS = Collection(
 )
 
 
-#: **Version 1.** Ordered as a first sync should run: the catalog before the
-#: prices that reference it, so a half-synced till never renders a price with no
-#: product behind it.
+# ---------------------------------------------------------------------------
+# S3's amendment · four collections a till reads and two it only writes
+# (ownership.md rule 9).
+#
+# The estimates are the pilot's, from the handoff's own figures: 1.184 active
+# references per sede and roughly 1,6 open lots per referencia. They are not the
+# seed's, and a check that asserts one against the other is red on every run for
+# a reason that has nothing to do with the code.
+#
+# **Existencias is online-only and server-authoritative, so no S3 surface reads
+# any of these in a browser.** They are provisioned for S4's counter -- its
+# stock, its FEFO queue, its expiry display and its low-stock signal, all at
+# zero latency -- and the registry is amended and measured once rather than
+# twice.
+# ---------------------------------------------------------------------------
+
+
+def _own_location(*, tenant_id, location_id, options):
+    del options
+    return Q(tenant_id=tenant_id, location_id=location_id)
+
+
+def _policy_scope(*, tenant_id, location_id, options):
+    """This sede's thresholds and the network-wide ones, and no other sede's.
+
+    The same `OR location_id IS NULL` shape `item_prices` takes, and served the
+    same way: `pull.py` runs the tuple scan once per branch and merges, which
+    keeps both on `(tenant_id, location_id, updated_at, id)`.
+    """
+    del options
+    return Q(tenant_id=tenant_id) & (
+        Q(location_id=location_id) | Q(location_id__isnull=True)
+    )
+
+
+def _elsewhere_scope(*, tenant_id, location_id, options):
+    from core.inventory.sync import elsewhere_scope
+
+    return elsewhere_scope(
+        tenant_id=tenant_id, location_id=location_id, options=options
+    )
+
+
+def _lot_scope(*, tenant_id, location_id, options):
+    from core.inventory.sync import lot_scope
+
+    return lot_scope(tenant_id=tenant_id, location_id=location_id, options=options)
+
+
+def _stock_document(record):
+    return {
+        **_head(record),
+        "location_id": _uuid(record["location_id"]),
+        "item_id": _uuid(record["item_id"]),
+        "lot_id": _uuid(record["lot_id"]),
+        "quantity": record["quantity"],
+    }
+
+
+STOCK_FIELDS = ("id", "updated_at", "location_id", "item_id", "lot_id", "quantity")
+
+STOCK_ON_HAND = Collection(
+    name="stock_on_hand",
+    model=StockOnHand,
+    scope=LOCATION_SCOPED,
+    push=False,
+    natural_key=None,
+    rows_per_location=1900,
+    bytes_per_location=230_000,
+    fields=STOCK_FIELDS,
+    scope_q=_own_location,
+    # Every row in scope belongs: the till's own sede's stock at lot grain is
+    # tier 1 authoritative and carries no staleness marker (§B.9.2). A key that
+    # sums to zero stays -- it is what `Quiebre` renders from.
+    member_q=lambda options: Q(),
+    member=lambda record, options: True,
+    document=_stock_document,
+)
+
+STOCK_ELSEWHERE = Collection(
+    name="stock_elsewhere",
+    model=StockOnHand,
+    # **Tenant-wide by declaration and not by predicate.** The scan is not "this
+    # sede's rows" -- it is every *other* sede's, for the items this one is in
+    # trouble on -- so `pull.py`'s location branch, which serves
+    # `location_id = $L OR location_id IS NULL`, would return nothing at all.
+    scope=TENANT_WIDE,
+    push=False,
+    natural_key=None,
+    # ≈ 420 at six sedes and ≈ 1.600 at twenty, hard-capped at 2.000 in
+    # `core.inventory.sync`. The set scales with the number of the device's own
+    # problems, not with the size of the network, which is what keeps A4 true.
+    rows_per_location=420,
+    bytes_per_location=50_000,
+    fields=STOCK_FIELDS,
+    scope_q=_elsewhere_scope,
+    member_q=lambda options: Q(),
+    member=lambda record, options: True,
+    document=_stock_document,
+)
+
+LOTS = Collection(
+    name="lots",
+    model=Lot,
+    # `lots` has no `location_id`, so the scan cannot be location-scoped; the
+    # predicate joins through `stock_on_hand` instead, and the delta cursor on
+    # this table is `(tenant_id, updated_at, id)` for the same reason.
+    scope=TENANT_WIDE,
+    push=False,
+    natural_key=None,
+    rows_per_location=2300,
+    bytes_per_location=253_000,
+    fields=("id", "updated_at", "item_id", "lot_code", "expires_at", "unit_cost"),
+    scope_q=_lot_scope,
+    member_q=lambda options: Q(),
+    member=lambda record, options: True,
+    document=lambda record: {
+        **_head(record),
+        "item_id": _uuid(record["item_id"]),
+        "lot_code": record["lot_code"],
+        "expires_at": _date(record["expires_at"]),
+        "unit_cost": _decimal(record["unit_cost"]),
+    },
+)
+
+POLICIES = Collection(
+    name="stock_policies",
+    model=StockPolicy,
+    scope=LOCATION_SCOPED,
+    push=False,
+    natural_key=None,
+    rows_per_location=1200,
+    bytes_per_location=144_000,
+    fields=(
+        "id",
+        "updated_at",
+        "item_id",
+        "location_id",
+        "min_quantity",
+        "max_quantity",
+        "reorder_point",
+        "target_coverage_days",
+        "source",
+    ),
+    scope_q=_policy_scope,
+    member_q=lambda options: Q(),
+    member=lambda record, options: True,
+    document=lambda record: {
+        **_head(record),
+        "item_id": _uuid(record["item_id"]),
+        "location_id": _uuid(record["location_id"]),
+        "min_quantity": record["min_quantity"],
+        "max_quantity": record["max_quantity"],
+        "reorder_point": record["reorder_point"],
+        "target_coverage_days": record["target_coverage_days"],
+        "source": record["source"],
+    },
+)
+
+
+def _never(*, tenant_id, location_id, options):
+    """The scan a push-only collection would run, if anything ever ran it.
+
+    Nothing does: `pullable` refuses these two by name. It is stated rather than
+    left as `None` so that a future reader who wires one into a pull gets an
+    empty page instead of an exception on a hot path.
+    """
+    del tenant_id, location_id, options
+    return Q(pk__in=[])
+
+
+RECEIPT_LINES = Collection(
+    name="receipt_lines",
+    model=StockMove,
+    scope=LOCATION_SCOPED,
+    push=True,
+    pull=False,
+    # Rule 8's first form. `stock_moves` carries the client-write quartet, so
+    # `(tenant_id, client_uuid)` is the whole of deduplication -- but the writer
+    # is S3's, because a receipt line creates or matches a `lots` row and
+    # appends through the ledger service rather than inserting a payload.
+    natural_key=None,
+    rows_per_location=0,
+    bytes_per_location=0,
+    fields=("id", "updated_at"),
+    scope_q=_never,
+    member_q=lambda options: Q(),
+    member=lambda record, options: False,
+    document=lambda record: _head(record),
+)
+
+COUNT_LINES = Collection(
+    name="stock_count_lines",
+    model=StockCountLine,
+    scope=LOCATION_SCOPED,
+    push=True,
+    pull=False,
+    natural_key=None,
+    rows_per_location=0,
+    bytes_per_location=0,
+    fields=("id", "updated_at"),
+    scope_q=_never,
+    member_q=lambda options: Q(),
+    member=lambda record, options: False,
+    document=lambda record: _head(record),
+)
+
+
+#: **Version 2.** Ordered as a first sync should run: the catalog before the
+#: prices that reference it, the lots before the stock that references them, so
+#: a half-synced till never renders a price with no product behind it or a
+#: quantity with no expiry date.
 COLLECTIONS: tuple[Collection, ...] = (
     ITEMS,
     BARCODES,
@@ -427,12 +652,22 @@ COLLECTIONS: tuple[Collection, ...] = (
     CATEGORIES,
     PRICES,
     CUSTOMERS,
+    LOTS,
+    STOCK_ON_HAND,
+    STOCK_ELSEWHERE,
+    POLICIES,
 )
 
-BY_NAME: dict[str, Collection] = {one.name: one for one in COLLECTIONS}
+#: Collections a device only ever writes. They are **not** in `COLLECTIONS`,
+#: which is what keeps them out of the digest, out of the first-sync card's
+#: totals and out of the pull -- each of those three asks a question about a
+#: snapshot, and an event log is not one.
+PUSH_ONLY: tuple[Collection, ...] = (RECEIPT_LINES, COUNT_LINES)
+
+BY_NAME: dict[str, Collection] = {one.name: one for one in (*COLLECTIONS, *PUSH_ONLY)}
 
 #: The tables a device may write, as a set, for the push endpoint's own guard.
-PUSHABLE = frozenset(one.name for one in COLLECTIONS if one.push)
+PUSHABLE = frozenset(one.name for one in BY_NAME.values() if one.push)
 
 
 def get(name: str) -> Collection:
@@ -443,6 +678,23 @@ def get(name: str) -> Collection:
             f"{name!r} is not in the sync registry. A table absent from the "
             "registry does not reach a device (ownership.md rule 9); adding one "
             "is an edit to core/sync/registry.py and to S2's stage document."
+        )
+    return collection
+
+
+def pullable(name: str) -> Collection:
+    """One collection a device may read, or the refusal that names the register.
+
+    A push-only collection is refused here rather than served empty: a client
+    asking for a page of `receipt_lines` is a client that misread the registry,
+    and an empty page would let it advance a cursor forever over nothing.
+    """
+    collection = get(name)
+    if not collection.pull:
+        raise LookupError(
+            f"{name!r} is a write-only collection: a device sends it and never "
+            "reads it back. The pullable collections are: "
+            + ", ".join(one.name for one in COLLECTIONS)
         )
     return collection
 
