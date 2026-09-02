@@ -50,7 +50,15 @@ def expire_invima_registrations(*, tenant_id, run_date):
             invima_expires_at__isnull=False,
             invima_expires_at__lt=day,
         )
-        count = lapsed.update(invima_status=InvimaStatus.EXPIRED)
+        # `updated_at` is stamped explicitly because `QuerySet.update()`
+        # bypasses `auto_now`. **`items` is in S2's sync registry**, and a
+        # column a till renders that changed without moving `updated_at` is a
+        # change no delta pull can serve and no digest can see: the row stays on
+        # every till reading `Registro vigente` for a registration that lapsed,
+        # for as long as nothing else touches it.
+        count = lapsed.update(
+            invima_status=InvimaStatus.EXPIRED, updated_at=timezone.now()
+        )
         if not count:
             return 0
         # One row per run naming the count, with **no actor**, rather than one

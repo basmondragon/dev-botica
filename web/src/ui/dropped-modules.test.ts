@@ -54,10 +54,82 @@ describe("the five dropped modules", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("ships no sync-state component, because §B.9 is S2's", () => {
-    const offenders = files.filter((file) =>
-      /sync-status|staleness/i.test(file),
+  it("ships exactly one sync-state component, and it is S2's", () => {
+    // S0 asserted this file did **not** exist, because §B.9 was S2's to write.
+    // S2 has written it, and the assertion flips rather than disappears: the
+    // property that matters is not "there is none" but "there is exactly one",
+    // and a second one is how two surfaces end up disagreeing about what
+    // `pending` means (§B.9.1).
+    const components = files.filter(
+      (file) => /sync-status/i.test(file) && !/\.test\.tsx?$/.test(file),
     );
-    expect(offenders).toEqual([]);
+    expect(components.map((file) => file.replace(SRC, ""))).toEqual([
+      "sync/sync-status.tsx",
+    ]);
+  });
+});
+
+/**
+ * *Acceptance* 30 · **the boundary §5 requires, checked as a boundary rather
+ * than as a convention.**
+ *
+ * All client sync code lives in one module and no domain code calls the
+ * replication API directly, so that if §4's measurements ever justify a sync
+ * engine — PowerSync, ElectricSQL, logical replication — it replaces that
+ * module and nothing else in the product moves. A convention nobody can fail is
+ * a convention that quietly stops being true around the fourth stage.
+ */
+describe("§5 · the client sync boundary", () => {
+  /**
+   * What actually ships. The generated schema names every path in the product
+   * and calls none of them, and a test file is the check rather than the code —
+   * neither is in the bundle, and both would make these greps report
+   * themselves.
+   */
+  const shipped = [...walk(SRC)].filter(
+    (file) =>
+      /\.tsx?$/.test(file) &&
+      !/\.test\.tsx?$/.test(file) &&
+      !/\.gen\.ts$/.test(file),
+  );
+
+  /** A rule reads code, not the prose beside it — the same blanking the §B.16
+   *  conformance greps do, and for the same reason. */
+  function code(file: string) {
+    return readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  }
+
+  const outside = (file: string) => !file.replace(SRC, "").startsWith("sync/");
+  const named = (files: string[]) => files.map((file) => file.replace(SRC, ""));
+
+  it("imports rxdb nowhere outside src/sync", () => {
+    const offenders = shipped.filter(
+      (file) => outside(file) && /from ["']rxdb/.test(code(file)),
+    );
+    expect(named(offenders)).toEqual([]);
+  });
+
+  it("issues a cursor query nowhere outside src/sync", () => {
+    const offenders = shipped.filter(
+      (file) =>
+        outside(file) && /api\/sync\/(pull|push|digest)/.test(code(file)),
+    );
+    expect(named(offenders)).toEqual([]);
+  });
+
+  it("ships no fiscal or numbering string in the bundle", () => {
+    // `blocked` ships with its geometry and **without its words** (A6, §8,
+    // §B.9.1). A string naming an exhausted numbering range would be live copy
+    // for a condition that cannot occur, which is how a stale string ships:
+    // nothing renders it, so no review catches it, and it reads as a promise
+    // the product still makes.
+    const offenders = shipped.filter((file) =>
+      /numeraci[oó]n|resoluci[oó]n dian|rango fiscal|CUDE|CUFE/i.test(
+        code(file),
+      ),
+    );
+    expect(named(offenders)).toEqual([]);
   });
 });

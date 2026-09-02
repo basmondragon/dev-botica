@@ -6,7 +6,12 @@ policies themselves live in the migrations, because Django has no vocabulary
 for them and a policy nobody can read in SQL is a policy nobody audits.
 
 S0's five -- `tenants`, `locations`, `users`, `invitations`, `audit_log` -- come
-first; S1's nine catalog tables follow under their own banner.
+first; S1's nine catalog tables follow under their own banner, then S2's two.
+
+S2 also migrates six delta-cursor indexes onto S1's tables under ledger rule 4:
+an index belongs to the stage whose read path needs it, and the read path is
+`GET /api/sync/pull`. They are declared here, on the models S1 owns, because the
+model state and the migration state have to agree.
 """
 
 import uuid
@@ -579,6 +584,15 @@ class Manufacturer(TenantScopedModel):
     class Meta:
         db_table = "manufacturers"
         ordering = ["name"]
+        # Rule 4 · S2's delta cursor. Tenant-wide, so the ledger's
+        # `(tenant_id, location_id, updated_at, id)` shorthand narrows to four
+        # columns here; the registry declares which shape each collection takes.
+        indexes = [
+            models.Index(
+                fields=["tenant", "updated_at", "id"],
+                name="manufacturers_delta_cursor",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "name"], name="one_manufacturer_name_per_tenant"
@@ -609,6 +623,12 @@ class Category(TenantScopedModel):
     class Meta:
         db_table = "categories"
         ordering = ["name"]
+        # Rule 4 · S2's delta cursor, tenant-wide.
+        indexes = [
+            models.Index(
+                fields=["tenant", "updated_at", "id"], name="categories_delta_cursor"
+            ),
+        ]
         constraints = [
             # NULLS NOT DISTINCT: without it two top-level categories could
             # share a name, because in SQL one NULL parent never equals another.
@@ -770,6 +790,15 @@ class Item(TenantScopedModel):
                 "tenant",
                 name="items_tenant_invima_reg",
             ),
+            # **Rule 4, and the stage is S2.** The delta pull's only query:
+            # `WHERE tenant_id = $T AND (updated_at, id) > ($C1, $C2)
+            #  AND updated_at <= $horizon ORDER BY updated_at, id LIMIT $n`.
+            # `id` is the last column because the cursor is a tuple: without
+            # it a page that ends inside a set of rows sharing one
+            # microsecond has nowhere the next page can start.
+            models.Index(
+                fields=["tenant", "updated_at", "id"], name="items_delta_cursor"
+            ),
         ]
         constraints = [
             # A7's whole negative: a service cannot track lots or expiry, and the
@@ -827,6 +856,16 @@ class ItemBarcode(TenantScopedModel):
     class Meta:
         db_table = "item_barcodes"
         ordering = ["-is_primary", "code"]
+        # Rule 4 · S2's delta cursor, tenant-wide. The collection's predicate
+        # narrows to the registry's items, but that half is evaluated over the
+        # page rather than in the WHERE clause -- `/api/sync/pull` has a p95
+        # budget of 20 ms and anything that makes it a join is a defect.
+        indexes = [
+            models.Index(
+                fields=["tenant", "updated_at", "id"],
+                name="item_barcodes_delta_cursor",
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "code"], name="one_item_per_barcode_per_tenant"
@@ -947,6 +986,15 @@ class ItemPrice(TenantScopedModel):
                 fields=["tenant", "item", "location", "effective_from"],
                 name="item_prices_resolution",
             ),
+            # Rule 4 · S2's delta cursor, in the ledger's own four-column shape,
+            # because this is the one S2 collection whose predicate is
+            # location-scoped. Its predicate admits `location_id IS NULL` as
+            # well, so the pull runs the tuple scan twice and merges rather than
+            # making the index partial.
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="item_prices_delta_cursor",
+            ),
         ]
         constraints = [
             # One open row per item per scope, always. NULLS NOT DISTINCT,
@@ -998,6 +1046,14 @@ class Customer(TenantScopedModel):
     class Meta:
         db_table = "customers"
         ordering = ["name"]
+        # Rule 4 · S2's delta cursor, tenant-wide and windowed by
+        # `customer_recency_months` -- the window is evaluated over the page, so
+        # the scan itself stays the plain tuple range.
+        indexes = [
+            models.Index(
+                fields=["tenant", "updated_at", "id"], name="customers_delta_cursor"
+            ),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "document_type", "document"],
@@ -1061,3 +1117,218 @@ class ImportRun(TenantScopedModel):
 
     def __str__(self):
         return f"{self.kind} · {self.status}"
+
+
+# ---------------------------------------------------------------------------
+# S2 · sync. Two tables and three enums (ledger, architecture §3, §5).
+#
+# `devices` is the unit of sync and of blame: a browser at a counter that has
+# been named, given a sede and handed a `device_key`. `sync_conflicts` is the
+# office's arrival queue for everything the protocol refused or could not
+# settle -- S2 writes the protocol rows, S3 the negative-stock rows and S4 the
+# two divergences an offline sale brings with it.
+#
+# Both carry the same S0 convention as every table above, and their policies
+# live in migration 0008 beside S0's and S1's.
+# ---------------------------------------------------------------------------
+
+
+class DeviceStatus(models.TextChoices):
+    """Two values, not three. A device is claimed in the same request that
+    creates it, so there is no `pending`."""
+
+    ACTIVE = "active", "Activo"
+    REVOKED = "revoked", "Dado de baja"
+
+
+class SyncConflictType(models.TextChoices):
+    """**Every value is declared here, at creation, and no later stage runs
+    `ALTER TYPE`** (ledger, enum register).
+
+    The first six are S2's own protocol refusals. `negative_stock` is written by
+    S3 and `stale_price` and `catalog_divergence` by S4 -- declaring a value is
+    not writing one. The reason is build order rather than courtesy: a value
+    added by the stage that writes it is a migration that has to land before the
+    stage that reads it, which is a coordination bug waiting for a clean build.
+    """
+
+    FOREIGN_TENANT = "foreign_tenant", "Fila de otra droguería"
+    FOREIGN_LOCATION = "foreign_location", "Fila de otra sede"
+    UNKNOWN_COLLECTION = "unknown_collection", "Colección desconocida"
+    PAYLOAD_REJECTED = "payload_rejected", "Datos rechazados"
+    DEVICE_REVOKED = "device_revoked", "Equipo dado de baja"
+    DEVICE_SILENT = "device_silent", "Equipo sin sincronizar"
+    NEGATIVE_STOCK = "negative_stock", "Existencias en negativo"
+    STALE_PRICE = "stale_price", "Precio desactualizado"
+    CATALOG_DIVERGENCE = "catalog_divergence", "Catálogo divergente"
+
+
+class SyncConflictStatus(models.TextChoices):
+    """`dismissed` exists because an administrator must be able to close a row
+    without claiming a correction was made, and a queue with only one exit is a
+    queue nobody keeps."""
+
+    OPEN = "open", "Abierto"
+    RESOLVED = "resolved", "Resuelto"
+    DISMISSED = "dismissed", "Descartado"
+
+
+class Device(TenantScopedModel):
+    """A browser install that sells: its sede, its label, its hashed key.
+
+    §3 names `location_id`, `label`, `device_key`, `last_seen_at` and
+    `last_synced_at`, and says it lists only the columns that carry a decision;
+    the other seven are coined here under ledger rule 1.
+
+    **It carries no fiscal role.** Numbering leases are not built at v1 (A6), so
+    a device is never the holder of a range.
+    """
+
+    location = models.ForeignKey(
+        Location,
+        # A sede holding tills is closed, not deleted -- the same reasoning
+        # `users.location` takes, and for the same reason: nulling it on the way
+        # out would leave a device that syncs nothing and blames nobody.
+        on_delete=models.PROTECT,
+        related_name="devices",
+    )
+    label = models.CharField(max_length=60)
+
+    #: Coined here under rule 1, and *Demo seed* is what requires it: every
+    #: seeded till carries one, and **`sales.number` is composed from it** --
+    #: which is what makes a seeded ticket read like the handoff's
+    #: `Venta C3-4821` rather than like a row from a generator. S4 reads it and
+    #: writes none of it; a stage that had to migrate this column onto a table
+    #: it neither creates nor writes would be doing what rule 1 forbids.
+    #:
+    #: Network-wide unique rather than per-sede, because it is one component of
+    #: a sale number that must not repeat anywhere in the network.
+    code = models.CharField(max_length=16)
+
+    #: **Returned once, at claim, and stored hashed.** A key that can be read
+    #: back from the server is a key that leaks through the office list. This is
+    #: `sha256` and not a password hash on purpose: the key is 256 bits of
+    #: `secrets` output, so there is no dictionary to slow down, and a per-call
+    #: bcrypt on the hot sync path would cost more than it protects.
+    device_key_hash = models.CharField(max_length=64, unique=True)
+
+    status = EnumField(
+        max_length=16,
+        choices=DeviceStatus,
+        db_enum="device_status",
+        default=DeviceStatus.ACTIVE,
+    )
+
+    #: Any `/api/sync/*` call. `last_synced_at` is a completed pull and
+    #: `last_pushed_at` a completed push -- three stamps because "quiet" and
+    #: "talking but not draining" are different support calls.
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_pushed_at = models.DateTimeField(null=True, blank=True)
+
+    #: The device's wall clock minus the server's, in milliseconds, as measured
+    #: on the last call. Displayed and **never** used to correct `occurred_at`
+    #: (§5 rule 4).
+    clock_skew_ms = models.IntegerField(null=True, blank=True)
+
+    #: **Nullable, and null is "not yet reported" -- never false.** A browser
+    #: that has not answered `navigator.storage.persist()` has not refused it.
+    storage_persisted = models.BooleanField(null=True, blank=True)
+
+    app_version = models.CharField(max_length=32, blank=True)
+
+    enrolled_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    enrolled_at = models.DateTimeField(default=timezone.now)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        db_table = "devices"
+        ordering = ["location__name", "label"]
+        constraints = [
+            # Two tills at one sede called `Caja 1` is a support call the day
+            # somebody reads a conflict report.
+            models.UniqueConstraint(
+                fields=["tenant", "location", "label"],
+                name="one_device_label_per_location",
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "code"], name="one_device_code_per_tenant"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=DeviceStatus.values),
+                name="device_status_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.label} · {self.location_id}"
+
+
+class SyncConflict(TenantScopedModel):
+    """The office's arrival queue: what the protocol refused, and what a later
+    stage could not settle.
+
+    **`detail` never carries the rejected payload verbatim.** It carries the
+    collection, the failing field, the reason code and the correlation id. A
+    rejected `customers` row contains a person's document number, and a conflict
+    queue is not a place to accumulate identifying data nobody asked to store
+    (Ley 1581, §7's reasoning one table over).
+    """
+
+    #: Nullable: S3's negative-stock rows may name no device.
+    device = models.ForeignKey(
+        Device, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    #: The registry name, as text -- `items`, `customers`, later `sales`.
+    collection = models.CharField(max_length=64, blank=True)
+    client_uuid = models.UUIDField(null=True, blank=True)
+    type = EnumField(
+        max_length=32, choices=SyncConflictType, db_enum="sync_conflict_type"
+    )
+    detail = models.JSONField(default=dict, blank=True)
+    status = EnumField(
+        max_length=16,
+        choices=SyncConflictStatus,
+        db_enum="sync_conflict_status",
+        default=SyncConflictStatus.OPEN,
+    )
+    #: The device's clock, stored exactly as it sent it. Null where the row was
+    #: raised by the server itself, which is every `device_silent`.
+    occurred_at = models.DateTimeField(null=True, blank=True)
+    #: The server's, and what every report reads (§5 rule 4).
+    recorded_at = models.DateTimeField(default=timezone.now)
+    resolved_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_note = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "sync_conflicts"
+        ordering = ["-recorded_at"]
+        indexes = [
+            # The queue's only ordering, and the filter the office opens it on.
+            models.Index(
+                fields=["tenant", "status", "-recorded_at"],
+                name="sync_conflicts_queue",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=SyncConflictStatus.values),
+                name="sync_conflict_status_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(type__in=SyncConflictType.values),
+                name="sync_conflict_type_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.type} · {self.collection}"

@@ -1970,6 +1970,687 @@
           }
         ]
       }
+    },
+    "/api/sync/registry": {
+      "get": {
+        "operationId": "core_sync_api_sync_registry",
+        "summary": "Sync Registry",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "What this device replicates, and how much of each there is.\n\nThe counts are read for **this** device rather than estimated, so the\nfirst-sync card counts against real totals and a stranger watching it cannot\ntell which figures came from the product and which from a fixture.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sync/pull": {
+      "get": {
+        "operationId": "core_sync_api_sync_pull",
+        "summary": "Sync Pull",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "collection",
+            "schema": {
+              "title": "Collection",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "updated_at",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "id",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One collection's delta after a `(updated_at, id)` cursor.\n\n**This is the one endpoint in the product with a p95 budget in the\narchitecture** -- under 20 ms server time with no changes pending (§4). It\nis a single indexed tuple scan that usually returns zero rows, and it is\ncalled by every till every `pull_interval_seconds`. Anything that makes it a\njoin is a defect.\n\nThere is no `location_id` parameter here, and adding one is the defect\ncriterion 29 exists to catch.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sync/push": {
+      "post": {
+        "operationId": "core_sync_api_sync_push",
+        "summary": "Sync Push",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Apply one batch in one pinned transaction and answer a per-row outcome.\n\nRule 6's fourth context, and S2 is the first code to use it. The pin is\nS0's; this endpoint calls it and never issues its own `SET LOCAL`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sync/digest": {
+      "get": {
+        "operationId": "core_sync_api_sync_digest",
+        "summary": "Sync Digest",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigestOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Per-collection row count and checksum at the horizon, for this device's\npredicate. The client's daily divergence check.\n\nBuilt on the same predicate as the pull, and answered from the device's own\nkey for the same reason: this is the endpoint most likely to grow a location\nparameter later.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/devices/claim": {
+      "post": {
+        "operationId": "core_sync_api_claim_device",
+        "summary": "Claim Device",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Claim this browser as a device.\n\nA `cashier` may claim only their own home sede -- the sede field is not a\ncontrol for them, so this is the guard against a pasted body rather than a\nrefusal anyone will see. `owner` and `admin` may claim any sede, which is\nthe one path by which an office identity enrols the browser it is sitting\nat (scope 2); they are never *offered* it (A4).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "operationId": "core_sync_api_list_devices",
+        "summary": "List Devices",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "revoked"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_DeviceOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The office list, server-paginated on the grid contract (§9).\n\nA device list that has only ever been opened at seven rows is a list nobody\nhas tried at the size it is for.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/devices/{device_id}": {
+      "get": {
+        "operationId": "core_sync_api_read_device",
+        "summary": "Read Device",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_sync_api_patch_device",
+        "summary": "Patch Device",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Relabel, or move a device to another sede.\n\n**A sede change is not a re-claim.** The device keeps its key and its\noutbox; what changes is its whole location-scoped predicate, so the next\npull answers a different `location_id` and the till resets and re-pulls the\ncollections that predicate reaches. That is why the pull response carries\n`location_id` at all.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/devices/{device_id}/revoke": {
+      "post": {
+        "operationId": "core_sync_api_revoke_device",
+        "summary": "Revoke Device",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "device_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Device Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Invalidate the `device_key`.\n\n**Revocation is not deletion, and a revoked device keeps its data.** A till\nwhose key was revoked because it was reassigned may still be holding unsent\nrows; wiping it to punish it destroys exactly what the office needs. Its\nnext sync call fails on the key and it renders\n`degraded · este equipo fue dado de baja` while keeping its local store and\nits outbox.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sync/conflicts": {
+      "get": {
+        "operationId": "core_sync_api_list_conflicts",
+        "summary": "List Conflicts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Device Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "resolved",
+                    "dismissed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ConflictOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The arrival queue. S3 and S4 write into the same table and read out\nhere; neither re-exposes this endpoint.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sync/conflicts/{conflict_id}": {
+      "patch": {
+        "operationId": "core_sync_api_patch_conflict",
+        "summary": "Patch Conflict",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conflict_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Conflict Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Close a row as `resolved` or `dismissed`, with a note. **Never deletes.**",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConflictPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/sync": {
+      "get": {
+        "operationId": "core_sync_api_read_sync_settings",
+        "summary": "Read Sync Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_sync_api_write_sync_settings",
+        "summary": "Write Sync Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write the `sync` group through S0's per-group helper.\n\nNo tenant id in the path: the tenant is pinned per request, so the write\nalways targets the current one (rule 5, rule 6). The helper issues one\n`jsonb_set` and leaves S0's `tenant` group exactly as it stands.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -4863,6 +5544,1003 @@
           "page_size"
         ],
         "title": "Page[ImportOut]",
+        "type": "object"
+      },
+      "CollectionOut": {
+        "description": "One registry row, as a device reads it.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "tenant",
+              "location"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "push": {
+            "title": "Push",
+            "type": "boolean"
+          },
+          "natural_key": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Natural Key"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "scope",
+          "push",
+          "natural_key",
+          "rows"
+        ],
+        "title": "CollectionOut",
+        "type": "object"
+      },
+      "RegistryOut": {
+        "properties": {
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "device_label": {
+            "title": "Device Label",
+            "type": "string"
+          },
+          "device_code": {
+            "title": "Device Code",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "location_code": {
+            "title": "Location Code",
+            "type": "string"
+          },
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionOut"
+            },
+            "title": "Collections",
+            "type": "array"
+          },
+          "server_time": {
+            "format": "date-time",
+            "title": "Server Time",
+            "type": "string"
+          },
+          "clock_skew_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Skew Ms"
+          },
+          "storage_persisted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Persisted"
+          },
+          "storage_persistence_policy": {
+            "enum": [
+              "warn",
+              "required"
+            ],
+            "title": "Storage Persistence Policy",
+            "type": "string"
+          },
+          "pull_interval_seconds": {
+            "title": "Pull Interval Seconds",
+            "type": "integer"
+          },
+          "pull_page_size": {
+            "title": "Pull Page Size",
+            "type": "integer"
+          },
+          "push_batch_max_rows": {
+            "title": "Push Batch Max Rows",
+            "type": "integer"
+          },
+          "push_batch_max_bytes": {
+            "title": "Push Batch Max Bytes",
+            "type": "integer"
+          },
+          "local_retention_days": {
+            "title": "Local Retention Days",
+            "type": "integer"
+          },
+          "clock_skew_warn_seconds": {
+            "title": "Clock Skew Warn Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "device_id",
+          "device_label",
+          "device_code",
+          "location_id",
+          "location_name",
+          "location_code",
+          "collections",
+          "server_time",
+          "clock_skew_ms",
+          "storage_persisted",
+          "storage_persistence_policy",
+          "pull_interval_seconds",
+          "pull_page_size",
+          "push_batch_max_rows",
+          "push_batch_max_bytes",
+          "local_retention_days",
+          "clock_skew_warn_seconds"
+        ],
+        "title": "RegistryOut",
+        "type": "object"
+      },
+      "CheckpointOut": {
+        "properties": {
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "updated_at",
+          "id"
+        ],
+        "title": "CheckpointOut",
+        "type": "object"
+      },
+      "PullOut": {
+        "properties": {
+          "documents": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckpointOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "server_time": {
+            "format": "date-time",
+            "title": "Server Time",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "documents",
+          "checkpoint",
+          "has_more",
+          "registry_version",
+          "server_time",
+          "location_id"
+        ],
+        "title": "PullOut",
+        "type": "object"
+      },
+      "PushOut": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "batch_outcome": {
+            "enum": [
+              "applied",
+              "rejected"
+            ],
+            "title": "Batch Outcome",
+            "type": "string"
+          },
+          "batch_reason": {
+            "default": "",
+            "title": "Batch Reason",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PushRowOut"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "server_time": {
+            "format": "date-time",
+            "title": "Server Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "batch_outcome",
+          "results",
+          "server_time"
+        ],
+        "title": "PushOut",
+        "type": "object"
+      },
+      "PushRowOut": {
+        "properties": {
+          "client_uuid": {
+            "title": "Client Uuid",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "applied",
+              "duplicate",
+              "merged",
+              "rejected"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_uuid",
+          "outcome"
+        ],
+        "title": "PushRowOut",
+        "type": "object"
+      },
+      "PushIn": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "client_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Time"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PushRowIn"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch_id",
+          "rows"
+        ],
+        "title": "PushIn",
+        "type": "object"
+      },
+      "PushRowIn": {
+        "properties": {
+          "collection": {
+            "title": "Collection",
+            "type": "string"
+          },
+          "client_uuid": {
+            "title": "Client Uuid",
+            "type": "string"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection",
+          "client_uuid",
+          "payload"
+        ],
+        "title": "PushRowIn",
+        "type": "object"
+      },
+      "DigestCollectionOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "checksum": {
+            "title": "Checksum",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "checksum"
+        ],
+        "title": "DigestCollectionOut",
+        "type": "object"
+      },
+      "DigestOut": {
+        "properties": {
+          "collections": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DigestCollectionOut"
+            },
+            "title": "Collections",
+            "type": "object"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "server_time": {
+            "format": "date-time",
+            "title": "Server Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collections",
+          "registry_version",
+          "server_time"
+        ],
+        "title": "DigestOut",
+        "type": "object"
+      },
+      "ClaimOut": {
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/DeviceOut"
+          },
+          "device_key": {
+            "title": "Device Key",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "device",
+          "device_key",
+          "registry_version"
+        ],
+        "title": "ClaimOut",
+        "type": "object"
+      },
+      "DeviceOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "last_pushed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Pushed At"
+          },
+          "clock_skew_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Skew Ms"
+          },
+          "storage_persisted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Persisted"
+          },
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "title": "Enrolled At",
+            "type": "string"
+          },
+          "enrolled_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolled By Name"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "open_conflicts": {
+            "title": "Open Conflicts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "code",
+          "location_id",
+          "location_name",
+          "status",
+          "last_seen_at",
+          "last_synced_at",
+          "last_pushed_at",
+          "clock_skew_ms",
+          "storage_persisted",
+          "app_version",
+          "enrolled_at",
+          "enrolled_by_name",
+          "revoked_at",
+          "open_conflicts"
+        ],
+        "title": "DeviceOut",
+        "type": "object"
+      },
+      "ClaimIn": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "location_id"
+        ],
+        "title": "ClaimIn",
+        "type": "object"
+      },
+      "Page_DeviceOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[DeviceOut]",
+        "type": "object"
+      },
+      "DevicePatchIn": {
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          }
+        },
+        "title": "DevicePatchIn",
+        "type": "object"
+      },
+      "ConflictOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "collection": {
+            "title": "Collection",
+            "type": "string"
+          },
+          "client_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Uuid"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "resolved",
+              "dismissed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "resolved_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved By Name"
+          },
+          "resolution_note": {
+            "title": "Resolution Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "device_id",
+          "device_label",
+          "location_id",
+          "location_name",
+          "collection",
+          "client_uuid",
+          "type",
+          "detail",
+          "status",
+          "occurred_at",
+          "recorded_at",
+          "resolved_at",
+          "resolved_by_name",
+          "resolution_note"
+        ],
+        "title": "ConflictOut",
+        "type": "object"
+      },
+      "Page_ConflictOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ConflictOut]",
+        "type": "object"
+      },
+      "ConflictPatchIn": {
+        "properties": {
+          "status": {
+            "enum": [
+              "resolved",
+              "dismissed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ConflictPatchIn",
+        "type": "object"
+      },
+      "SyncSettingsOut": {
+        "properties": {
+          "pull_interval_seconds": {
+            "title": "Pull Interval Seconds",
+            "type": "integer"
+          },
+          "pull_page_size": {
+            "title": "Pull Page Size",
+            "type": "integer"
+          },
+          "push_batch_max_rows": {
+            "title": "Push Batch Max Rows",
+            "type": "integer"
+          },
+          "push_batch_max_bytes": {
+            "title": "Push Batch Max Bytes",
+            "type": "integer"
+          },
+          "pull_safety_horizon_seconds": {
+            "title": "Pull Safety Horizon Seconds",
+            "type": "integer"
+          },
+          "local_retention_days": {
+            "title": "Local Retention Days",
+            "type": "integer"
+          },
+          "clock_skew_warn_seconds": {
+            "title": "Clock Skew Warn Seconds",
+            "type": "integer"
+          },
+          "customer_recency_months": {
+            "title": "Customer Recency Months",
+            "type": "integer"
+          },
+          "storage_persistence_policy": {
+            "enum": [
+              "warn",
+              "required"
+            ],
+            "title": "Storage Persistence Policy",
+            "type": "string"
+          },
+          "stale_device_hours": {
+            "title": "Stale Device Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pull_interval_seconds",
+          "pull_page_size",
+          "push_batch_max_rows",
+          "push_batch_max_bytes",
+          "pull_safety_horizon_seconds",
+          "local_retention_days",
+          "clock_skew_warn_seconds",
+          "customer_recency_months",
+          "storage_persistence_policy",
+          "stale_device_hours"
+        ],
+        "title": "SyncSettingsOut",
+        "type": "object"
+      },
+      "SyncSettingsIn": {
+        "properties": {
+          "pull_interval_seconds": {
+            "title": "Pull Interval Seconds",
+            "type": "integer"
+          },
+          "pull_page_size": {
+            "title": "Pull Page Size",
+            "type": "integer"
+          },
+          "push_batch_max_rows": {
+            "title": "Push Batch Max Rows",
+            "type": "integer"
+          },
+          "push_batch_max_bytes": {
+            "title": "Push Batch Max Bytes",
+            "type": "integer"
+          },
+          "pull_safety_horizon_seconds": {
+            "title": "Pull Safety Horizon Seconds",
+            "type": "integer"
+          },
+          "local_retention_days": {
+            "title": "Local Retention Days",
+            "type": "integer"
+          },
+          "clock_skew_warn_seconds": {
+            "title": "Clock Skew Warn Seconds",
+            "type": "integer"
+          },
+          "customer_recency_months": {
+            "title": "Customer Recency Months",
+            "type": "integer"
+          },
+          "storage_persistence_policy": {
+            "enum": [
+              "warn",
+              "required"
+            ],
+            "title": "Storage Persistence Policy",
+            "type": "string"
+          },
+          "stale_device_hours": {
+            "title": "Stale Device Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pull_interval_seconds",
+          "pull_page_size",
+          "push_batch_max_rows",
+          "push_batch_max_bytes",
+          "pull_safety_horizon_seconds",
+          "local_retention_days",
+          "clock_skew_warn_seconds",
+          "customer_recency_months",
+          "storage_persistence_policy",
+          "stale_device_hours"
+        ],
+        "title": "SyncSettingsIn",
         "type": "object"
       }
     },

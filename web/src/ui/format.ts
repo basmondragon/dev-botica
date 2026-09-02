@@ -143,4 +143,33 @@ function asDate(value: Date | string): Date {
   return new Date(value);
 }
 
+/**
+ * `2026-09-02` — **the pharmacy's calendar day, not the machine's.**
+ *
+ * A price window is `[effective_from, effective_to)` over days the droguería
+ * means, and the server evaluates them in `America/Bogota`. A till whose OS
+ * clock is set to UTC — a common kiosk default — would otherwise roll over to
+ * tomorrow at 19:00 Bogotá and charge tomorrow's price for five hours, on the
+ * one figure a customer is about to pay.
+ *
+ * The timezone is a constant for the same reason the locale is: there is no
+ * `i18n` runtime and no second locale (architecture §1). A network that opens
+ * outside Colombia is a change here and a `tenants.settings` key, not a
+ * per-call-site fix.
+ */
+const BUSINESS_TIMEZONE = "America/Bogota";
+
+const businessDayParts = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+export function businessDay(at: Date = new Date()): string {
+  // `en-CA` formats as `YYYY-MM-DD`, which is the shape every date-only value
+  // in this product already has on the wire.
+  return businessDayParts.format(at);
+}
+
 export const NON_BREAKING_SPACE = NBSP;

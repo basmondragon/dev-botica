@@ -32,3 +32,7 @@ from core.demo import identity  # noqa: E402,F401  -- registers "identity"
 # S1's fixture, and the pattern every later stage follows: one import per stage,
 # registering one fixture that declares what it writes and what it needs first.
 from core.catalog import demo as catalog  # noqa: E402,F401  -- registers "catalog"
+
+# S2's fixture: the tills. It requires "identity" for `locations` and is what
+# S4's fixture will hang its sales on.
+from core.sync import demo as sync  # noqa: E402,F401  -- registers "devices"

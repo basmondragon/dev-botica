@@ -2,7 +2,7 @@
 
 The operating platform for Colombian droguerías. `.docs/architecture.md` is the authority; `.docs/stages/` is how it gets built, in order.
 
-**This repository is at S1 — Catalog.** S0 built four containers against one Postgres, invite-only sign-in, the tenancy and audit substrate every later stage calls rather than rebuilds, and the application shell with one empty route per later-stage surface. S1 fills the first of them: one table for products and services, the registro INVIMA, IVA per line, the price editor that is the only thing in Botica that changes a price, an internal load tool, and a demo seed that builds Droguerías La 45 with 4.284 references.
+**This repository is at S2 — Sync.** S0 built four containers against one Postgres, invite-only sign-in, the tenancy and audit substrate every later stage calls rather than rebuilds, and the application shell with one empty route per later-stage surface. S1 filled the first of them: one table for products and services, the registro INVIMA, IVA per line, the price editor that is the only thing in Botica that changes a price, an internal load tool, and a demo seed that builds Droguerías La 45 with 4.284 references. S2 turns a browser at a counter into a **device**: it downloads that sede's operating set once, reads it at zero latency with the network gone, queues what it writes in a local outbox, and drains that outbox exactly once when the link returns — including when the push times out after the server already committed.
 
 ## Bring it up
 
@@ -76,6 +76,19 @@ Two of them are the ones that matter and are invisible in every other check:
 | `imports` | for S6's sales-history loader to record its runs in without a migration |
 | `core/catalog/demo.py` | the `catalog` fixture, the root every later stage's fixture declares a dependency on behind S0's identity fixture |
 | `web/src/catalog/item-combobox.tsx` | the catalog combobox S3's receiving, S4's product lookup, S6's order lines and S7's price grid all read |
+
+## What S2 hands the chain
+
+| | |
+| --- | --- |
+| `core/sync/registry.py` | **the declared set of collections that reach a device**, with a predicate and a per-location estimate each. A table absent from it does not reach a till, and adding one is an edit to this file and to S2's stage document (ledger rule 9, A4) |
+| `core/sync/push.py` | the idempotent client-write service. One batch, one pinned transaction, per-row outcomes, dedupe on `(tenant_id, client_uuid)` or a declared natural key. **S3, S4, S5 and S8 call it and none dedupes by hand** (rule 8, A5) |
+| `core/sync/pull.py` | the `(updated_at, id)` tuple cursor below a safety horizon. A stage adding a collection adds a predicate and an index, not an endpoint |
+| the delta cursor indexes | `(tenant_id, location_id, updated_at, id)` for a location-scoped collection, `(tenant_id, updated_at, id)` for a tenant-wide one (rule 4) |
+| `devices` | the unit of sync and of blame: its sede, its label, its hashed key, both freshness stamps, its clock skew, its storage state — and `code`, which S4 composes `sales.number` from |
+| `sync_conflicts` and its three enums | the office's arrival queue. **S3 writes the negative-stock rows and S4 writes `stale_price` and `catalog_divergence`**; the enum carries all nine values from creation, so neither ships an `ALTER TYPE` |
+| `web/src/sync/` | the whole client half behind one module — the local store, the outbox, the poll schedule and its backoff, `SyncStatus` and its five states, the sync panel. If §4's measurements ever justify a sync engine it replaces this module and nothing else (§5) |
+| the outbox | one local-only queue every later stage writes into. S3 and S4 add a kind to it and a line to the panel; neither builds a second |
 
 ## Where things are
 

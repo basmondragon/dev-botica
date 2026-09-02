@@ -26,13 +26,19 @@ dev = [
 ]
 
 [tool.setuptools]
+# Explicit, so `pip install .` in the image ships exactly these. A package
+# missing here is a package the container does not have: `core.catalog` was
+# already absent, which S2 found because `core/demo/__init__.py` imports it to
+# register S1's fixture and S2's own import chain runs through the same line.
 packages = [
     "botica",
     "core",
+    "core.catalog",
     "core.demo",
     "core.management",
     "core.management.commands",
     "core.migrations",
+    "core.sync",
 ]
 
 [tool.pytest.ini_options]

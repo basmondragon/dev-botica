@@ -874,3 +874,17 @@ def read_audit_log(
 from core.catalog.api import router as catalog_router  # noqa: E402
 
 api.add_router("", catalog_router)
+
+
+# ---------------------------------------------------------------------------
+# S2 · sync
+#
+# The same rule one stage on: a Router, not a second schema. Its paths already
+# read `/sync/...`, `/devices/...` and `/settings/sync`, so the prefix is empty
+# here too. **Every line of sync code it calls lives behind `core/sync/`** (§5)
+# -- this is the mount and nothing else.
+# ---------------------------------------------------------------------------
+
+from core.sync.api import router as sync_router  # noqa: E402
+
+api.add_router("", sync_router)

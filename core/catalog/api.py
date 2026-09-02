@@ -923,6 +923,26 @@ def _replace_barcodes(request, item, barcodes):
         code__in=[code for code, _ in codes]
     ).delete()
     existing = {row.code: row for row in ItemBarcode.objects.filter(item=item)}
+
+    # **The demotion happens once, before the loop.** The partial unique index
+    # admits one primary per item, so moving which one it is has to pass through
+    # zero -- but clearing *inside* the loop cleared it again on the next
+    # iteration, after `existing` had been read: submitting the new primary
+    # before the old one demoted the row the same loop had just promoted, and
+    # the item ended with no primary at all.
+    #
+    # `updated_at` is stamped explicitly because `QuerySet.update()` bypasses
+    # `auto_now`, and `item_barcodes` is in S2's sync registry -- a flag that
+    # moved without moving `updated_at` is a change no delta pull can serve and
+    # no digest can see, so every till would keep scanning to the old primary.
+    wanted = next((code for code, primary in codes if primary), None)
+    held = next((code for code, row in existing.items() if row.is_primary), None)
+    if held is not None and held != wanted:
+        ItemBarcode.objects.filter(item=item, is_primary=True).update(
+            is_primary=False, updated_at=timezone.now()
+        )
+        existing[held].is_primary = False
+
     for code, primary in codes:
         row = existing.get(code)
         if row is None:
@@ -933,11 +953,6 @@ def _replace_barcodes(request, item, barcodes):
                 is_primary=primary,
             )
         elif row.is_primary != primary:
-            # Clearing first: the partial unique index admits one primary per
-            # item, and swapping which one it is has to pass through zero.
-            ItemBarcode.objects.filter(item=item, is_primary=True).update(
-                is_primary=False
-            )
             row.is_primary = primary
             row.save(update_fields=["is_primary", "updated_at"])
 

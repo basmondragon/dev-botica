@@ -556,9 +556,12 @@ class Loader:
         if held is not None and held.item_id != item.id:
             raise RowRefused(f"el código ya es de «{held.item.name}»")
         if primary:
+            # `updated_at` explicitly: `QuerySet.update()` bypasses `auto_now`,
+            # and `item_barcodes` is in S2's sync registry — a flag that moved
+            # without moving `updated_at` is a change no till ever pulls.
             ItemBarcode.objects.filter(item=item, is_primary=True).exclude(
                 code=code
-            ).update(is_primary=False)
+            ).update(is_primary=False, updated_at=timezone.now())
         return _upsert(
             ItemBarcode,
             {"tenant_id": self.tenant_id, "code": code},

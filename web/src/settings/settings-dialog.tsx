@@ -8,6 +8,7 @@ import { GeneralSection } from "./general";
 import { PeopleSection } from "./people";
 import { ActivitySection } from "./activity";
 import { CustomersSection } from "./catalog-customers";
+import { DevicesSection } from "./devices";
 import { SuppliersSection } from "./catalog-suppliers";
 import { TaxonomySection } from "./catalog-taxonomy";
 import {
@@ -123,6 +124,8 @@ function Dialog({ me, id }: { me: Me; id: string }) {
               <GeneralSection me={me} />
             ) : current?.id === "people" ? (
               <PeopleSection me={me} />
+            ) : current?.id === "devices" ? (
+              <DevicesSection me={me} />
             ) : current?.id === "catalog-taxonomy" ? (
               <TaxonomySection me={me} />
             ) : current?.id === "catalog-suppliers" ? (

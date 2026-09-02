@@ -9,6 +9,8 @@ import {
 import { ApiError } from "@/api/client";
 import { useMe } from "@/api/queries";
 import { SettingsDialog } from "@/settings/settings-dialog";
+import { ClaimGate } from "@/sync/claim-card";
+import { SyncProvider, isTillRole } from "@/sync/context";
 import {
   Content,
   Shell,
@@ -132,7 +134,17 @@ function AppLayout() {
     );
   }
 
-  return (
+  // A4 · **an office browser is never a device and never replicates.**
+  //
+  // The provider is mounted for every role, because `/counter` is a route every
+  // role can open and a surface that threw for an owner would be a crash rather
+  // than a boundary. Two things are gated instead, and they are the two the
+  // architecture actually names: the engine, which `SyncProvider` starts only
+  // for a till, and the **claim card**, which is offered when a `cashier` signs
+  // in and to nobody else. An `owner` who means to prepare a till claims it
+  // explicitly from Ajustes · Sedes y dispositivos (scope 2).
+  const till = isTillRole(me.data.role);
+  const shell = (
     <>
       <SkipLink />
       <Shell me={me.data}>
@@ -141,5 +153,9 @@ function AppLayout() {
       <SettingsDialog me={me.data} />
       <KeyboardSheet />
     </>
+  );
+
+  return (
+    <SyncProvider>{till ? <ClaimGate>{shell}</ClaimGate> : shell}</SyncProvider>
   );
 }

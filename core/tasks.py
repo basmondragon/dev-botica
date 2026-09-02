@@ -138,3 +138,4 @@ def enqueue_invitation_email(invitation, token):
 # importing it here. One import per stage, and the worker's task list stays a
 # thing somebody can read in one place.
 from core.catalog import jobs  # noqa: E402,F401  -- registers S1's INVIMA sweep
+from core.sync import jobs as sync_jobs  # noqa: E402,F401  -- S2's stale-device check
