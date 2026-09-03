@@ -112,3 +112,33 @@ def send_expiry_digest(
             "run_date": run_date,
         },
     )
+
+
+def send_stale_shifts(*, recipients, tenant_name, location_name, run_date, shifts):
+    """Turnos left open more than a day, to the network's owner and
+    administrators.
+
+    **It reports and never closes.** Closing a cash session without a count
+    destroys the count, which is the one number the session exists to produce
+    (§6), so this message names the tills and asks a person to decide -- there is
+    no link in it that closes anything.
+
+    One message per recipient rather than one with several addressees: a
+    droguería's owner and its two administrators are three people, not a mailing
+    list, and a `To` header naming all three publishes their addresses to each
+    other.
+    """
+    outcome = NOT_CONFIGURED
+    for email in recipients:
+        outcome = _send(
+            "stale_shifts",
+            email,
+            f"{tenant_name} · {location_name}: {len(shifts)} turnos sin cerrar",
+            {
+                "tenant_name": tenant_name,
+                "location_name": location_name,
+                "run_date": run_date,
+                "shifts": shifts,
+            },
+        )
+    return outcome

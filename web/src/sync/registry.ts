@@ -14,7 +14,7 @@ import type { RxJsonSchema } from "rxdb";
 
 /** Bumped with `REGISTRY_VERSION` on the server. A client behind the server
  *  enters `degraded · versión desactualizada` and reloads the shell. */
-export const REGISTRY_VERSION = 2;
+export const REGISTRY_VERSION = 3;
 
 /**
  * **The stores opened on a till, which is not the same list as the streams.**
@@ -41,6 +41,21 @@ export const COLLECTIONS = [
   "lots",
   "stock_on_hand",
   "stock_policies",
+  // S4's amendment (ownership.md rule 9). **Six streams, three stores**, and
+  // the arithmetic is the reason: RxDB's open-core build refuses the fifteenth
+  // collection outright and stalls for 1,8 s on the fourteenth, which is most
+  // of the 2,5 s cold-start budget spent on a limit rather than on the till.
+  // Nine stores were open before this stage; these three take the database to
+  // twelve, and the outbox is the thirteenth.
+  //
+  // The grouping is by shape and not by convenience: a sale and a return are
+  // both documents with a number, a total and a tax; a line, a payment and a
+  // returned line are all components of one, each carrying its parent's id.
+  // **S5 and S8 share these stores rather than opening their own** — there is
+  // no fourteenth.
+  "shifts",
+  "sales",
+  "sale_lines",
 ] as const;
 
 export type CollectionName = (typeof COLLECTIONS)[number];
@@ -52,35 +67,65 @@ export type CollectionName = (typeof COLLECTIONS)[number];
  * rows for the references this one is short of, and a single cursor over both
  * sets would advance past one on the other's pages.
  */
-export const STREAMS = [...COLLECTIONS, "stock_elsewhere"] as const;
+export const STREAMS = [
+  ...COLLECTIONS,
+  "stock_elsewhere",
+  "payments",
+  "sale_returns",
+  "sale_return_lines",
+] as const;
 
 export type StreamName = (typeof STREAMS)[number];
 
 /** Which store a stream's documents land in. Identity except where two streams
  *  share a shape. */
+const SHARED_STORE: Partial<Record<StreamName, CollectionName>> = {
+  stock_elsewhere: "stock_on_hand",
+  // A return is a sale document; a payment and a returned line are both
+  // components of one. See the note on `COLLECTIONS`.
+  sale_returns: "sales",
+  payments: "sale_lines",
+  sale_return_lines: "sale_lines",
+};
+
 export function storeOf(stream: StreamName): CollectionName {
-  return stream === "stock_elsewhere" ? "stock_on_hand" : stream;
+  return SHARED_STORE[stream] ?? (stream as CollectionName);
 }
+
+/** Which stream each of S4's shared-store documents came from, as the `kind`
+ *  the server stamps on the document itself. */
+const KIND_OF: Partial<Record<StreamName, string>> = {
+  sales: "sale",
+  sale_returns: "return",
+  sale_lines: "line",
+  payments: "payment",
+  sale_return_lines: "return_line",
+};
 
 /**
  * Which of a shared store's documents belong to which stream.
  *
- * Only the two stock streams need one, and the split is the predicate itself:
- * this sede's rows are the till's own stock, every other sede's are the
- * other-location set. It is what lets a reset wipe one stream without taking
- * the other's rows with it, and what lets the daily digest compare each half
- * against the server's own answer for that half.
+ * For the two stock streams the split is the predicate itself: this sede's rows
+ * are the till's own stock, every other sede's are the other-location set. For
+ * S4's five it is the `kind` the server stamps. Either way it is what lets a
+ * reset wipe one stream without taking the other's rows with it, and what lets
+ * the daily digest compare each half against the server's own answer for it.
  */
 export function belongsTo(
   stream: StreamName,
-  document: { location_id?: string | null },
+  document: { location_id?: string | null; kind?: string },
   deviceLocationId: string,
 ): boolean {
   if (stream === "stock_on_hand")
     return document.location_id === deviceLocationId;
   if (stream === "stock_elsewhere")
     return document.location_id !== deviceLocationId;
-  return true;
+  const kind = KIND_OF[stream];
+  // **A `kind` and not a heuristic over which fields are present.** A reset
+  // wipes one stream's rows out of a shared store and leaves the others where
+  // they are; a guess that got it wrong would delete rows whose cursor stayed
+  // put, and the till would sit on a hole until the next daily digest.
+  return kind === undefined || document.kind === kind;
 }
 
 /**
@@ -90,6 +135,14 @@ export function belongsTo(
  */
 export const LOCATION_SCOPED: readonly StreamName[] = [
   "item_prices",
+  // All six of S4's: a till moved to another sede holds the wrong sede's
+  // tickets exactly as it holds the wrong sede's stock.
+  "shifts",
+  "sales",
+  "sale_lines",
+  "payments",
+  "sale_returns",
+  "sale_return_lines",
   // All four of S3's, and for the same reason: every one of them is selected by
   // where the till is. `lots` has no `location_id` of its own, but its
   // predicate joins through `stock_on_hand`, so a till that moved sede holds
@@ -107,6 +160,13 @@ export const PUSHABLE: readonly string[] = [
   "customers",
   "receipt_lines",
   "stock_count_lines",
+  // S4's six, and they are the first collections a till both reads and writes.
+  "shifts",
+  "sales",
+  "sale_lines",
+  "payments",
+  "sale_returns",
+  "sale_return_lines",
 ];
 
 /**
@@ -118,7 +178,42 @@ export const QUEUE_LABELS: Record<string, string> = {
   customers: "Clientes",
   receipt_lines: "Movimientos",
   stock_count_lines: "Conteos",
+  shifts: "Turnos",
+  sales: "Ventas",
+  sale_returns: "Devoluciones",
 };
+
+/**
+ * Which label a queued row is counted under.
+ *
+ * §B.9.3 draws `Ventas 2 · Movimientos 9 · Conteos 1`, and **a ticket's lines
+ * and its payments are counted as the sale they belong to**: a cashier asks how
+ * many *sales* are waiting, and eleven rows for one ticket is a number that
+ * measures the protocol rather than the queue. S4 is the first stage whose one
+ * document is several outbox rows, which is why the grouping exists at all.
+ */
+const QUEUE_GROUP: Record<string, string> = {
+  sale_lines: "sales",
+  payments: "sales",
+  sale_return_lines: "sale_returns",
+};
+
+export function queueGroups(
+  counts: Record<string, number>,
+): [string, number][] {
+  const grouped: Record<string, number> = {};
+  for (const [kind, total] of Object.entries(counts)) {
+    if (total <= 0) continue;
+    const key = QUEUE_GROUP[kind] ?? kind;
+    grouped[key] = (grouped[key] ?? 0) + total;
+  }
+  // The registry's own order, so the line reads the same on every till rather
+  // than in whatever order the outbox happened to answer.
+  const order = Object.keys(QUEUE_LABELS);
+  return Object.entries(grouped).sort(
+    (a, b) => order.indexOf(a[0]) - order.indexOf(b[0]),
+  );
+}
 
 /** The Spanish name of each stream, for the first-sync card. The card counts a
  *  download, and a download is a stream. */
@@ -133,6 +228,12 @@ export const COLLECTION_LABELS: Record<StreamName, string> = {
   stock_on_hand: "Existencias de la sede",
   stock_elsewhere: "Existencias en otras sedes",
   stock_policies: "Umbrales",
+  shifts: "Turnos",
+  sales: "Ventas recientes",
+  sale_lines: "Líneas de venta",
+  payments: "Pagos",
+  sale_returns: "Devoluciones",
+  sale_return_lines: "Líneas de devolución",
 };
 
 /** Every document carries these two, and the cursor and the digest are both
@@ -226,6 +327,9 @@ export interface StockDoc {
   item_id: string;
   lot_id: string | null;
   quantity: number;
+  /** Carried only by the other-location set: a till holds no `locations`
+   *  collection, and `hay 96 en Suba` is read offline or not at all. */
+  location_name: string | null;
 }
 
 export interface LotDoc {
@@ -235,6 +339,89 @@ export interface LotDoc {
   lot_code: string;
   expires_at: string | null;
   unit_cost: string | null;
+}
+
+/**
+ * A turno, as the till stores it.
+ *
+ * `declared_total` and `variance` are null on an open shift and on a forced
+ * close, and the two are different states: an open drawer has not been counted
+ * *yet*, and a forced close is a drawer nobody counted at all (§6).
+ */
+export interface ShiftDoc {
+  id: string;
+  updated_at: string;
+  location_id: string;
+  /** The till the drawer belongs to. The collection is scoped by sede, so a
+   *  device holds its neighbours' turnos too — and this is what tells them
+   *  apart. */
+  device_id: string | null;
+  user_id: string | null;
+  user_name: string;
+  opened_at: string;
+  closed_at: string | null;
+  opening_float: string;
+  declared_total: string | null;
+  variance: string | null;
+  status: "open" | "closed";
+}
+
+/**
+ * A ticket **or** a devolución — one store, split by `kind`.
+ *
+ * Money is a string on the wire and in the store, never a number: `12345.67`
+ * through IEEE 754 and back is not `12345.67`, and this is the one figure a
+ * customer is about to pay.
+ */
+export interface SaleDoc {
+  id: string;
+  updated_at: string;
+  kind: "sale" | "return";
+  location_id: string;
+  shift_id: string | null;
+  number: string;
+  status: "open" | "closed" | "voided";
+  source: "counter" | "imported";
+  customer_id: string | null;
+  subtotal: string;
+  discount: string;
+  tax: string;
+  total: string;
+  sold_by_user_id: string | null;
+  sold_by_name: string;
+  occurred_at: string;
+  /** The sale a devolución reverses. Null on a sale. */
+  sale_id: string | null;
+  reason: string;
+  refund_method: string | null;
+}
+
+/**
+ * A ticket line, a payment or a returned line — one store, split by `kind`.
+ *
+ * `parent_id` is the sale's id for a line and a payment and the return's for a
+ * returned line, which is what lets one index serve all three.
+ */
+export interface SaleLineDoc {
+  id: string;
+  updated_at: string;
+  kind: "line" | "payment" | "return_line";
+  parent_id: string;
+  location_id: string;
+  sale_line_id: string | null;
+  position: number | null;
+  item_id: string | null;
+  lot_id: string | null;
+  quantity: number | null;
+  unit_price: string | null;
+  discount: string | null;
+  vat_class: string | null;
+  tax_amount: string | null;
+  unit_cost: string | null;
+  from_suggestion: boolean | null;
+  method: string | null;
+  amount: string | null;
+  reference: string | null;
 }
 
 export interface PolicyDoc {
@@ -280,6 +467,7 @@ const STOCK_FIELDS = {
   item_id: { type: "string", maxLength: 36 },
   lot_id: { type: ["string", "null"], maxLength: 36 },
   quantity: { type: "number" },
+  location_name: { type: ["string", "null"] },
 } as const;
 
 /**
@@ -390,6 +578,78 @@ export const SCHEMAS = {
     STOCK_FIELDS,
     ["item_id", "quantity"],
     [["item_id"]],
+  ),
+  shifts: schema<ShiftDoc>(
+    {
+      location_id: { type: "string", maxLength: 36 },
+      device_id: { type: ["string", "null"], maxLength: 36 },
+      user_id: { type: ["string", "null"], maxLength: 36 },
+      user_name: { type: "string" },
+      opened_at: { type: "string", maxLength: 32 },
+      closed_at: { type: ["string", "null"], maxLength: 32 },
+      opening_float: { type: "string" },
+      declared_total: { type: ["string", "null"] },
+      variance: { type: ["string", "null"] },
+      status: { type: "string", maxLength: 16 },
+    },
+    ["location_id", "opened_at", "status"],
+    // The one query a till runs against this store on every route load: **the
+    // open turno for this device**, which is what makes the counter sellable
+    // (acceptance 4). The device is applied over the handful of rows the status
+    // index returns, because it is nullable and RxDB will not index a nullable
+    // field.
+    [["status", "opened_at"]],
+  ),
+  sales: schema<SaleDoc>(
+    {
+      kind: { type: "string", maxLength: 8 },
+      location_id: { type: "string", maxLength: 36 },
+      shift_id: { type: ["string", "null"], maxLength: 36 },
+      number: { type: "string", maxLength: 32 },
+      status: { type: "string", maxLength: 16 },
+      source: { type: "string", maxLength: 16 },
+      customer_id: { type: ["string", "null"], maxLength: 36 },
+      subtotal: { type: "string" },
+      discount: { type: "string" },
+      tax: { type: "string" },
+      total: { type: "string" },
+      sold_by_user_id: { type: ["string", "null"], maxLength: 36 },
+      sold_by_name: { type: "string" },
+      occurred_at: { type: "string", maxLength: 32 },
+      sale_id: { type: ["string", "null"], maxLength: 36 },
+      reason: { type: "string" },
+      refund_method: { type: ["string", "null"], maxLength: 16 },
+    },
+    ["kind", "location_id", "number", "status", "occurred_at"],
+    // Found by number, which is how a cashier reaches yesterday's sale for a
+    // return; and listed by kind and date, which is the recent-sales list and
+    // the average-ticket note's own window.
+    [["number"], ["kind", "occurred_at"]],
+  ),
+  sale_lines: schema<SaleLineDoc>(
+    {
+      kind: { type: "string", maxLength: 16 },
+      parent_id: { type: "string", maxLength: 36 },
+      location_id: { type: "string", maxLength: 36 },
+      sale_line_id: { type: ["string", "null"], maxLength: 36 },
+      position: { type: ["number", "null"] },
+      item_id: { type: ["string", "null"], maxLength: 36 },
+      lot_id: { type: ["string", "null"], maxLength: 36 },
+      quantity: { type: ["number", "null"] },
+      unit_price: { type: ["string", "null"] },
+      discount: { type: ["string", "null"] },
+      vat_class: { type: ["string", "null"], maxLength: 16 },
+      tax_amount: { type: ["string", "null"] },
+      unit_cost: { type: ["string", "null"] },
+      from_suggestion: { type: ["boolean", "null"] },
+      method: { type: ["string", "null"], maxLength: 16 },
+      amount: { type: ["string", "null"] },
+      reference: { type: ["string", "null"] },
+    },
+    ["kind", "parent_id", "location_id"],
+    // One index for all three kinds: a ticket's lines, a ticket's payments and
+    // a devolución's lines are each `(kind, parent_id)`.
+    [["kind", "parent_id"]],
   ),
   stock_policies: schema<PolicyDoc>(
     {

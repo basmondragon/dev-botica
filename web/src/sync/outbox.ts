@@ -38,16 +38,37 @@ export const EMPTY: DrainReport = {
   reason: "",
 };
 
+/** The last millisecond a key was minted in, and the counter inside it. */
+let mintedAt = 0;
+let sequence = 0;
+
 function uuidV7(): string {
   // uuid v7, so `client_uuid` sorts by time and the server can apply a batch in
   // the order the counter produced it (A5).
-  const now = BigInt(Date.now());
+  //
+  // **The 12-bit counter is RFC 9562's monotonic method, and S4 is what makes
+  // it load-bearing.** A sale's close event, its payments and its lines are
+  // minted inside the same millisecond, and the push applies a batch in
+  // `client_uuid` order — so keys that fell back on randomness inside one
+  // millisecond would let a payment arrive before the sale it pays for. A clock
+  // that steps backwards keeps the last millisecond and bumps the counter,
+  // because a key that went backwards is worse than a key a millisecond early.
+  const wall = Date.now();
+  if (wall > mintedAt) {
+    mintedAt = wall;
+    sequence = 0;
+  } else {
+    sequence = (sequence + 1) & 0x0fff;
+    if (sequence === 0) mintedAt += 1;
+  }
+  const now = BigInt(mintedAt);
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   for (let index = 0; index < 6; index += 1) {
     bytes[index] = Number((now >> BigInt(8 * (5 - index))) & 0xffn);
   }
-  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
+  bytes[6] = 0x70 | ((sequence >> 8) & 0x0f);
+  bytes[7] = sequence & 0xff;
   bytes[8] = (bytes[8]! & 0x3f) | 0x80;
   const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0"));
   return [

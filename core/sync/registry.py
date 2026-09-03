@@ -49,6 +49,12 @@ from core.models import (
     ItemPrice,
     Lot,
     Manufacturer,
+    Payment,
+    Sale,
+    SaleLine,
+    SaleReturn,
+    SaleReturnLine,
+    Shift,
     StockCountLine,
     StockMove,
     StockOnHand,
@@ -62,7 +68,12 @@ from core.models import (
 #: **2 · S3's amendment** (rule 9): four collections a till reads --
 #: `stock_on_hand`, `stock_elsewhere`, `lots` and `stock_policies` -- and two it
 #: only ever writes, `receipt_lines` and `stock_count_lines`.
-REGISTRY_VERSION = 2
+#:
+#: **3 · S4's amendment** (rule 9): the six the till both reads and writes --
+#: `shifts`, `sales`, `sale_lines`, `payments`, `sale_returns` and
+#: `sale_return_lines`. They are the first collections in the registry that go
+#: both ways, which is what an offline till selling actually is.
+REGISTRY_VERSION = 3
 
 TENANT_WIDE = "tenant"
 LOCATION_SCOPED = "location"
@@ -489,7 +500,28 @@ def _stock_document(record):
         "item_id": _uuid(record["item_id"]),
         "lot_id": _uuid(record["lot_id"]),
         "quantity": record["quantity"],
+        # Carried only by the other-location set, below.
+        "location_name": record.get("location_name"),
     }
+
+
+def _mark_location_names(records):
+    """Stamp the sede's name on a page of other-location rows.
+
+    **A till holds no `locations` collection** -- the registry has thirteen RxDB
+    slots and none of them is spent on six names -- so `hay 96 en Suba` could
+    not be rendered offline from an id. One indexed lookup over the handful of
+    sedes on the page is what makes the clause answerable with the cable out of
+    the wall, which is the only condition it is ever read in.
+    """
+    if not records:
+        return
+    from core.models import Location
+
+    ids = {record["location_id"] for record in records}
+    names = dict(Location.objects.filter(id__in=ids).values_list("id", "name"))
+    for record in records:
+        record["location_name"] = names.get(record["location_id"], "")
 
 
 STOCK_FIELDS = ("id", "updated_at", "location_id", "item_id", "lot_id", "quantity")
@@ -531,6 +563,9 @@ STOCK_ELSEWHERE = Collection(
     scope_q=_elsewhere_scope,
     member_q=lambda options: Q(),
     member=lambda record, options: True,
+    # The sede's own name, because the till has no `locations` collection to
+    # join against and `hay 96 en Suba` is read offline or not at all.
+    enrich=lambda records: _mark_location_names(records),
     document=_stock_document,
 )
 
@@ -593,6 +628,375 @@ POLICIES = Collection(
 )
 
 
+# ---------------------------------------------------------------------------
+# S4's amendment · six collections the till reads **and** writes
+# (ownership.md rule 9).
+#
+# They are the first two-way collections in the registry, which is what an
+# offline till selling actually is: the same rows it writes are the rows a
+# return, a shift's cash arithmetic and the average-ticket note read back.
+#
+# **Seven days, not thirty.** Thirty is 18.000 sales and roughly 54.000 lines
+# per sede, which is no longer "a few megabytes" (§4) and pushes cold start
+# against its 2,5 s budget. Seven covers the return window a droguería actually
+# sees and keeps the store small. The estimates below are the pilot's, against
+# §4's own load figure of 600 tickets per sede per day -- not the seed's.
+#
+# **The predicate is the location, not the device.** A customer returns to the
+# counter, not to a machine, so every till at a sede can serve a return rung up
+# on any of them.
+#
+# **The two retention windows are constants here rather than settings keys**,
+# because the ledger's key register assigns S4 no `tenants.settings` group and
+# S4 does not invent one (S4, *Gated on*). A pilot that needs them configurable
+# is a change to the register first.
+#
+# **What S4 does not do to `customers`.** S4's stage document narrows that
+# collection to *seen at this location within 180 days*. Answering "seen at
+# this location" means joining `sales`, and `scope_q` is the query
+# `/api/sync/pull` budgets at 20 ms p95 -- a join there is the defect that
+# budget exists to prevent, and `member` cannot answer it either because the
+# fact is not on the row. The recency window S2 already applies is what bounds
+# the slice; doing it properly would mean a denormalised
+# `customers.last_seen_location_id`, which is a column on S1's table and S1's to
+# decide.
+# ---------------------------------------------------------------------------
+
+#: A turno stays on the till a month: the open one, and the recent closed ones
+#: the shift list shows.
+SHIFT_RETENTION_DAYS = 30
+
+#: A sale stays a week. Every `open` sale stays regardless of age -- a stranded
+#: ticket is exactly the row a till must not lose sight of.
+SALE_RETENTION_DAYS = 7
+
+
+def _window(days):
+    return timezone.now() - timedelta(days=days)
+
+
+def _sale_member_q(options):
+    del options
+    return Q(occurred_at__gte=_window(SALE_RETENTION_DAYS)) | Q(status="open")
+
+
+def _child_of_sale_member_q(options):
+    return Q(sale__occurred_at__gte=_window(SALE_RETENTION_DAYS)) | Q(
+        sale__status="open"
+    )
+
+
+def _mark_parent_window(records, parent_field, model, columns):
+    """Stamp a page of children with what their parent's membership turns on.
+
+    At most `pull_page_size` primary keys, and zero when the page is empty --
+    which is the case the p95 budget is about. This is the same shape
+    `_mark_active_items` takes for `item_barcodes`, and it exists for the same
+    reason: a child whose parent left the window has to arrive as a
+    **departure**, so a WHERE that excluded it would leave it on every till
+    forever, and a join would put the parent table in the query the 20 ms budget
+    is measured on.
+    """
+    if not records:
+        return
+    ids = {record[parent_field] for record in records if record[parent_field]}
+    if not ids:
+        return
+    parents = {
+        row["id"]: row
+        for row in model._default_manager.filter(id__in=ids).values("id", *columns)
+    }
+    for record in records:
+        parent = parents.get(record[parent_field]) or {}
+        for column in columns:
+            record[f"parent_{column}"] = parent.get(column)
+
+
+def _child_in_sale_window(record) -> bool:
+    occurred = record.get("parent_occurred_at")
+    if record.get("parent_status") == "open":
+        return True
+    return occurred is not None and occurred >= _window(SALE_RETENTION_DAYS)
+
+
+SHIFTS = Collection(
+    name="shifts",
+    model=Shift,
+    scope=LOCATION_SCOPED,
+    push=True,
+    natural_key=None,
+    rows_per_location=60,
+    bytes_per_location=14_000,
+    fields=(
+        "id",
+        "updated_at",
+        "location_id",
+        # **The till the drawer belongs to.** The collection is scoped by sede,
+        # so a second till at the same sede pulls the first one's open turno --
+        # and with no `device_id` on the document it could not tell that turno
+        # from its own. The drawer belongs to the till, not to the person, and
+        # this is the column that says so on the device.
+        "device_id",
+        "user_id",
+        "user_name",
+        "opened_at",
+        "closed_at",
+        "opening_float",
+        "declared_total",
+        "variance",
+        "status",
+    ),
+    scope_q=_own_location,
+    member_q=lambda options: Q(opened_at__gte=_window(SHIFT_RETENTION_DAYS)),
+    member=lambda record, options: record["opened_at"] >= _window(SHIFT_RETENTION_DAYS),
+    document=lambda record: {
+        **_head(record),
+        "location_id": _uuid(record["location_id"]),
+        "device_id": _uuid(record["device_id"]),
+        "user_id": _uuid(record["user_id"]),
+        "user_name": record["user_name"],
+        "opened_at": _iso(record["opened_at"]),
+        "closed_at": _iso(record["closed_at"]),
+        "opening_float": _decimal(record["opening_float"]),
+        "declared_total": _decimal(record["declared_total"]),
+        "variance": _decimal(record["variance"]),
+        "status": record["status"],
+    },
+)
+
+SALES = Collection(
+    name="sales",
+    model=Sale,
+    scope=LOCATION_SCOPED,
+    push=True,
+    natural_key=None,
+    rows_per_location=4200,
+    bytes_per_location=1_150_000,
+    fields=(
+        "id",
+        "updated_at",
+        "location_id",
+        "shift_id",
+        "number",
+        "status",
+        "source",
+        "customer_id",
+        "subtotal",
+        "discount",
+        "tax",
+        "total",
+        "sold_by_user_id",
+        "sold_by_name",
+        "occurred_at",
+    ),
+    scope_q=_own_location,
+    member_q=_sale_member_q,
+    member=lambda record, options: (
+        record["status"] == "open"
+        or record["occurred_at"] >= _window(SALE_RETENTION_DAYS)
+    ),
+    document=lambda record: {
+        **_head(record),
+        # **The store's discriminator, and it is the device's storage shape
+        # rather than a column.** RxDB's open-core build caps a database at
+        # thirteen collections and the registry is committed to more streams
+        # than that, so a sale and a return share one store on the till exactly
+        # as the two stock streams already do -- and the split has to be a field
+        # on the row, because that is all `belongsTo` has to read.
+        "kind": "sale",
+        "location_id": _uuid(record["location_id"]),
+        "shift_id": _uuid(record["shift_id"]),
+        "number": record["number"],
+        "status": record["status"],
+        "source": record["source"],
+        "customer_id": _uuid(record["customer_id"]),
+        "subtotal": _decimal(record["subtotal"]),
+        "discount": _decimal(record["discount"]),
+        "tax": _decimal(record["tax"]),
+        "total": _decimal(record["total"]),
+        "sold_by_user_id": _uuid(record["sold_by_user_id"]),
+        "sold_by_name": record["sold_by_name"],
+        "occurred_at": _iso(record["occurred_at"]),
+    },
+)
+
+SALE_LINES = Collection(
+    name="sale_lines",
+    model=SaleLine,
+    scope=LOCATION_SCOPED,
+    push=True,
+    natural_key=None,
+    rows_per_location=12600,
+    bytes_per_location=2_520_000,
+    fields=(
+        "id",
+        "updated_at",
+        "sale_id",
+        "location_id",
+        "position",
+        "item_id",
+        "lot_id",
+        "quantity",
+        "unit_price",
+        "discount",
+        "vat_class",
+        "tax_amount",
+        "unit_cost",
+        "from_suggestion",
+    ),
+    scope_q=_own_location,
+    member_q=_child_of_sale_member_q,
+    member=lambda record, options: _child_in_sale_window(record),
+    enrich=lambda records: _mark_parent_window(
+        records, "sale_id", Sale, ("occurred_at", "status")
+    ),
+    document=lambda record: {
+        **_head(record),
+        "kind": "line",
+        "parent_id": _uuid(record["sale_id"]),
+        "sale_line_id": None,
+        "location_id": _uuid(record["location_id"]),
+        "position": record["position"],
+        "item_id": _uuid(record["item_id"]),
+        "lot_id": _uuid(record["lot_id"]),
+        "quantity": record["quantity"],
+        "unit_price": _decimal(record["unit_price"]),
+        "discount": _decimal(record["discount"]),
+        "vat_class": record["vat_class"],
+        "tax_amount": _decimal(record["tax_amount"]),
+        "unit_cost": _decimal(record["unit_cost"]),
+        "from_suggestion": record["from_suggestion"],
+    },
+)
+
+PAYMENTS = Collection(
+    name="payments",
+    model=Payment,
+    scope=LOCATION_SCOPED,
+    push=True,
+    natural_key=None,
+    rows_per_location=4700,
+    bytes_per_location=610_000,
+    fields=(
+        "id",
+        "updated_at",
+        "sale_id",
+        "location_id",
+        "method",
+        "amount",
+        "reference",
+    ),
+    scope_q=_own_location,
+    member_q=_child_of_sale_member_q,
+    member=lambda record, options: _child_in_sale_window(record),
+    enrich=lambda records: _mark_parent_window(
+        records, "sale_id", Sale, ("occurred_at", "status")
+    ),
+    document=lambda record: {
+        **_head(record),
+        "kind": "payment",
+        "parent_id": _uuid(record["sale_id"]),
+        "sale_line_id": None,
+        "location_id": _uuid(record["location_id"]),
+        "method": record["method"],
+        "amount": _decimal(record["amount"]),
+        "reference": record["reference"],
+    },
+)
+
+SALE_RETURNS = Collection(
+    name="sale_returns",
+    model=SaleReturn,
+    scope=LOCATION_SCOPED,
+    push=True,
+    natural_key=None,
+    rows_per_location=200,
+    bytes_per_location=46_000,
+    fields=(
+        "id",
+        "updated_at",
+        "sale_id",
+        "location_id",
+        "shift_id",
+        "number",
+        "total",
+        "tax",
+        "reason",
+        "refund_method",
+        "occurred_at",
+    ),
+    scope_q=_own_location,
+    member_q=lambda options: Q(occurred_at__gte=_window(SALE_RETENTION_DAYS)),
+    member=lambda record, options: (
+        record["occurred_at"] >= _window(SALE_RETENTION_DAYS)
+    ),
+    document=lambda record: {
+        **_head(record),
+        "kind": "return",
+        "sale_id": _uuid(record["sale_id"]),
+        "location_id": _uuid(record["location_id"]),
+        "shift_id": _uuid(record["shift_id"]),
+        "number": record["number"],
+        "total": _decimal(record["total"]),
+        "tax": _decimal(record["tax"]),
+        "reason": record["reason"],
+        "refund_method": record["refund_method"],
+        "occurred_at": _iso(record["occurred_at"]),
+    },
+)
+
+SALE_RETURN_LINES = Collection(
+    name="sale_return_lines",
+    model=SaleReturnLine,
+    scope=LOCATION_SCOPED,
+    push=True,
+    natural_key=None,
+    rows_per_location=400,
+    bytes_per_location=82_000,
+    fields=(
+        "id",
+        "updated_at",
+        "sale_return_id",
+        "sale_line_id",
+        "location_id",
+        "item_id",
+        "lot_id",
+        "quantity",
+        "unit_price",
+        "discount",
+        "vat_class",
+        "tax_amount",
+        "unit_cost",
+    ),
+    scope_q=_own_location,
+    member_q=lambda options: Q(
+        sale_return__occurred_at__gte=_window(SALE_RETENTION_DAYS)
+    ),
+    member=lambda record, options: (
+        (record.get("parent_occurred_at") is not None)
+        and record["parent_occurred_at"] >= _window(SALE_RETENTION_DAYS)
+    ),
+    enrich=lambda records: _mark_parent_window(
+        records, "sale_return_id", SaleReturn, ("occurred_at",)
+    ),
+    document=lambda record: {
+        **_head(record),
+        "kind": "return_line",
+        "parent_id": _uuid(record["sale_return_id"]),
+        "sale_line_id": _uuid(record["sale_line_id"]),
+        "location_id": _uuid(record["location_id"]),
+        "item_id": _uuid(record["item_id"]),
+        "lot_id": _uuid(record["lot_id"]),
+        "quantity": record["quantity"],
+        "unit_price": _decimal(record["unit_price"]),
+        "discount": _decimal(record["discount"]),
+        "vat_class": record["vat_class"],
+        "tax_amount": _decimal(record["tax_amount"]),
+        "unit_cost": _decimal(record["unit_cost"]),
+    },
+)
+
+
 def _never(*, tenant_id, location_id, options):
     """The scan a push-only collection would run, if anything ever ran it.
 
@@ -641,10 +1045,12 @@ COUNT_LINES = Collection(
 )
 
 
-#: **Version 2.** Ordered as a first sync should run: the catalog before the
-#: prices that reference it, the lots before the stock that references them, so
-#: a half-synced till never renders a price with no product behind it or a
-#: quantity with no expiry date.
+#: **Version 3.** Ordered as a first sync should run: the catalog before the
+#: prices that reference it, the lots before the stock that references them, and
+#: S4's six last of all -- the shift before the sales that sit in it, the sale
+#: before its lines and its payments, the return before its lines -- so a
+#: half-synced till never renders a price with no product behind it, a quantity
+#: with no expiry date, or a ticket line with no ticket.
 COLLECTIONS: tuple[Collection, ...] = (
     ITEMS,
     BARCODES,
@@ -656,6 +1062,12 @@ COLLECTIONS: tuple[Collection, ...] = (
     STOCK_ON_HAND,
     STOCK_ELSEWHERE,
     POLICIES,
+    SHIFTS,
+    SALES,
+    SALE_LINES,
+    PAYMENTS,
+    SALE_RETURNS,
+    SALE_RETURN_LINES,
 )
 
 #: Collections a device only ever writes. They are **not** in `COLLECTIONS`,

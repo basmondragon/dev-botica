@@ -36,9 +36,23 @@ def test_me_answers_the_identity_the_shell_gates_its_nav_on(client_as, owner_a, 
 
 
 @pytest.mark.django_db
-def test_nav_counters_are_empty_at_s0(client_as, owner_a):
-    """Zero renders nothing at all -- not a 0, not a dot, not a dimmed badge."""
+def test_nav_counters_report_zero_and_zero_renders_nothing(client_as, owner_a):
+    """Zero renders nothing at all -- not a 0, not a dot, not a dimmed badge.
+
+    S4 filled `counter` with ventas abiertas, so the map is no longer empty; a
+    tenant that has never sold reports zero, and the shell is what declines to
+    draw it.
+    """
     response = client_as(owner_a).get("/api/nav-counters")
+    assert response.json() == {"counters": {"counter": 0}, "critical": []}
+
+
+@pytest.mark.django_db
+def test_a_cashier_asks_the_server_for_no_nav_counter(client_as, cashier_a):
+    """A4 · the till is the read model that knows how many tickets are open on
+    it, and a nav counter that needed the network would be the one number on a
+    till surface that stops working when the cable comes out (§4)."""
+    response = client_as(cashier_a).get("/api/nav-counters")
     assert response.json() == {"counters": {}, "critical": []}
 
 

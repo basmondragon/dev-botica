@@ -587,6 +587,40 @@ def _document_effects(rows, profile):
     return effects, picks
 
 
+def stocked_days_back(row) -> int:
+    """How many days back this row's shelf was actually stocked.
+
+    **Public because S4's fixture sells from these shelves and must not date a
+    sale before the receipt that made it possible.** It is the first stamp
+    `_stamps` produces for the row, and it is not the same for every row: a row
+    with one opening move gets it at `newest` -- twelve to nineteen days back,
+    because a single move standing for a shelf's whole history reads as the day
+    it was loaded -- while a row with a real history gets it at `oldest`, five
+    to eight months back. Deriving it here rather than restating the arithmetic
+    one module over is what keeps the two from drifting apart silently.
+    """
+    seed = stable_int("history", row["item_key"], row["sede"])
+    if _history_depth(row) > 1:
+        return HISTORY_WINDOW_DAYS - seed % 90
+    return HISTORY_SETTLES_DAYS + seed % 8
+
+
+def documented_keys(profile) -> set:
+    """The `(sede, item_key, lot_code)` rows this fixture's own documents move.
+
+    **Public because S4's fixture must not sell from them.** A row a transfer or
+    a count later credits carries *less* than its planned quantity for most of
+    the window -- the opening moves are written short by exactly the document's
+    delta, so the projection lands on the plan only once the document has been
+    applied. A sale against such a row inside that window is a lot trace that
+    dips below zero on a shelf that was never short, which is the defect
+    `test_a_seeded_lot_reads_as_a_history_and_never_dips_below_zero` exists to
+    catch.
+    """
+    effects, _picks = _document_effects(stock_plan(profile), profile)
+    return set(effects)
+
+
 def _transfer_ends(picked, index):
     """One transfer's two ends: **the same reference at two sedes.**
 

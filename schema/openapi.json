@@ -48,7 +48,7 @@
             }
           }
         },
-        "description": "Empty at S0. S4 fills `counter` and S6 fills `purchasing`; a stage adds\nits key here rather than fetching its own count.",
+        "description": "§B.8.2 · the nav's counters. S6 fills `purchasing`; a stage adds its key\nhere rather than fetching its own count.\n\n**`counter` is ventas abiertas, and only for an office identity.** A\n`cashier` reads the same number from their own local store at zero latency\nand never asks the server for it -- the till is the read model that knows,\nand a nav counter that needed the network would be the one number on a till\nsurface that stops working when the cable comes out (§4, A4).",
         "security": [
           {
             "RoleAuth": []
@@ -1742,7 +1742,7 @@
             }
           }
         },
-        "description": "The clientes. `q` matches document and name.",
+        "description": "The clientes. `q` matches document and name.\n\n**A `cashier` must name who they are looking for.** The role reaches this\nlist so the counter can attach an acquirer to a ticket, which is always a\nsearch for one person -- and an unfiltered page would hand a till the\nnetwork's whole customer table, with every document number, phone, email and\naddress on it. That is the data S2's recency window and its departure scrub\nexist to keep off a device (Ley 1581, §7).",
         "security": [
           {
             "RoleAuth": []
@@ -4154,6 +4154,736 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/InventorySettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sales": {
+      "get": {
+        "operationId": "core_counter_api_list_sales",
+        "summary": "List Sales",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "shift_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Shift Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "closed",
+                    "voided"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "counter",
+                    "imported"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sold_by_user_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sold By User Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SaleRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The sale list the office reads.\n\nA `cashier` reads their own home sede and no other, which is the scoped mode\nof S0's helper rather than a filter written here (A2) -- and a cashier at a\ntill does not read this at all: the counter answers the same question from\nits local store at zero latency (§4).",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sales/{sale_id}": {
+      "get": {
+        "operationId": "core_counter_api_read_sale",
+        "summary": "Read Sale",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sale_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Sale Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One sale with its lines, payments and returns. What the record panel\nrenders, and what a devolución is started from.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sales/{sale_id}/void": {
+      "post": {
+        "operationId": "core_counter_api_void_sale",
+        "summary": "Void Sale",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sale_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Sale Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Void a sale already received by the server.\n\n**The cashier's own same-shift void is a client write and does not call\nthis** -- a mis-keyed ticket at 10:14 is corrected at 10:15 by the person who\nmade it, and once the turno closes only an `owner` or an `admin` may void. A\npermissive void is how a till is robbed; a strictly-office void means a\nmis-key at 20:00 waits for Monday.\n\nNo row is deleted: the reversing moves go through S3's service and\n`status` becomes `voided` (ledger, rule 7).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sale-returns": {
+      "get": {
+        "operationId": "core_counter_api_list_returns",
+        "summary": "List Returns",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sale_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sale Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ReturnRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The return list, same contract and same filters as the sale list.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sale-returns/{return_id}": {
+      "get": {
+        "operationId": "core_counter_api_read_return",
+        "summary": "Read Return",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "return_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Return Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One return with its lines and the sale it reverses.\n\n**S5 reads this to build the return's credit note inside the canonical\ndocument** (ledger, cross-stage services). It carries the money as it was\noriginally charged, so nobody re-derives a peso from a price list.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/shifts": {
+      "get": {
+        "operationId": "core_counter_api_list_shifts",
+        "summary": "List Shifts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "title": "Location Id",
+              "type": "array"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "device_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Device Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ShiftRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The turno list: who opened, when, the float, the count, the recomputed\nexpectation and the difference between the last two.\n\n`Diferencia` is **recomputed on every read** rather than trusted from the\nstored figure, because the stored one was computed when the shift closed and\nan offline sale attributed to that turno may have arrived since (§5). The\ntwo agree on a drained till, which is the point of showing both.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/shifts/{shift_id}": {
+      "get": {
+        "operationId": "core_counter_api_read_shift",
+        "summary": "Read Shift",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One turno: its sales, its takings by method, and the close report.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/shifts/{shift_id}/force-close": {
+      "post": {
+        "operationId": "core_counter_api_force_close_shift",
+        "summary": "Force Close Shift",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Shift Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShiftDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Close a turno whose device is gone or whose cashier left without counting.\n\n**It leaves `declared_total` and `variance` null.** A forced close is not a\ncount and is never rendered as one; a zero here would claim an empty drawer\nwas counted, which is a different and much worse thing to record.\n\nThe daily `stale_shift_notice` job does not do this and never will: closing a\ncash session without a count destroys the count, which is the one number the\nsession exists to produce.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForceCloseIn"
               }
             }
           },
@@ -10725,6 +11455,1147 @@
           }
         },
         "title": "InventorySettingsIn",
+        "type": "object"
+      },
+      "Page_SaleRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SaleRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[SaleRow]",
+        "type": "object"
+      },
+      "SaleRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "shift_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Id"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed",
+              "voided"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "counter",
+              "imported"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "occurred_at": {
+            "title": "Occurred At"
+          },
+          "recorded_at": {
+            "title": "Recorded At"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total"
+          },
+          "methods": {
+            "items": {
+              "enum": [
+                "cash",
+                "debit_card",
+                "credit_card",
+                "transfer",
+                "other"
+              ],
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "sold_by_name": {
+            "title": "Sold By Name",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "returned": {
+            "title": "Returned",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "location_id",
+          "location_name",
+          "shift_id",
+          "status",
+          "source",
+          "occurred_at",
+          "recorded_at",
+          "item_count",
+          "total",
+          "methods",
+          "customer_id",
+          "customer_name",
+          "sold_by_name",
+          "device_id",
+          "device_label",
+          "returned"
+        ],
+        "title": "SaleRow",
+        "type": "object"
+      },
+      "PaymentOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "debit_card",
+              "credit_card",
+              "transfer",
+              "other"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "amount": {
+            "title": "Amount"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "amount",
+          "reference"
+        ],
+        "title": "PaymentOut",
+        "type": "object"
+      },
+      "ReturnRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "sale_id": {
+            "format": "uuid",
+            "title": "Sale Id",
+            "type": "string"
+          },
+          "sale_number": {
+            "title": "Sale Number",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "occurred_at": {
+            "title": "Occurred At"
+          },
+          "recorded_at": {
+            "title": "Recorded At"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total"
+          },
+          "tax": {
+            "title": "Tax"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "refund_method": {
+            "enum": [
+              "cash",
+              "debit_card",
+              "credit_card",
+              "transfer",
+              "other"
+            ],
+            "title": "Refund Method",
+            "type": "string"
+          },
+          "returned_by_name": {
+            "title": "Returned By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "sale_id",
+          "sale_number",
+          "location_id",
+          "location_name",
+          "occurred_at",
+          "recorded_at",
+          "item_count",
+          "total",
+          "tax",
+          "reason",
+          "refund_method",
+          "returned_by_name"
+        ],
+        "title": "ReturnRow",
+        "type": "object"
+      },
+      "SaleDetail": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "shift_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Id"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed",
+              "voided"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "counter",
+              "imported"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "occurred_at": {
+            "title": "Occurred At"
+          },
+          "recorded_at": {
+            "title": "Recorded At"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total"
+          },
+          "methods": {
+            "items": {
+              "enum": [
+                "cash",
+                "debit_card",
+                "credit_card",
+                "transfer",
+                "other"
+              ],
+              "type": "string"
+            },
+            "title": "Methods",
+            "type": "array"
+          },
+          "customer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Id"
+          },
+          "customer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer Name"
+          },
+          "sold_by_name": {
+            "title": "Sold By Name",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "returned": {
+            "title": "Returned",
+            "type": "boolean"
+          },
+          "subtotal": {
+            "title": "Subtotal"
+          },
+          "discount": {
+            "title": "Discount"
+          },
+          "tax": {
+            "title": "Tax"
+          },
+          "void_reason": {
+            "title": "Void Reason",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SaleLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentOut"
+            },
+            "title": "Payments",
+            "type": "array"
+          },
+          "returns": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnRow"
+            },
+            "title": "Returns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "location_id",
+          "location_name",
+          "shift_id",
+          "status",
+          "source",
+          "occurred_at",
+          "recorded_at",
+          "item_count",
+          "total",
+          "methods",
+          "customer_id",
+          "customer_name",
+          "sold_by_name",
+          "device_id",
+          "device_label",
+          "returned",
+          "subtotal",
+          "discount",
+          "tax",
+          "void_reason",
+          "lines",
+          "payments",
+          "returns"
+        ],
+        "title": "SaleDetail",
+        "type": "object"
+      },
+      "SaleLineOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "unit_price": {
+            "title": "Unit Price"
+          },
+          "discount": {
+            "title": "Discount"
+          },
+          "vat_class": {
+            "enum": [
+              "excluded",
+              "exempt",
+              "rate_5",
+              "rate_19"
+            ],
+            "title": "Vat Class",
+            "type": "string"
+          },
+          "tax_amount": {
+            "title": "Tax Amount"
+          },
+          "unit_cost": {
+            "title": "Unit Cost"
+          },
+          "from_suggestion": {
+            "title": "From Suggestion",
+            "type": "boolean"
+          },
+          "returned_quantity": {
+            "title": "Returned Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "item_id",
+          "item_name",
+          "presentation",
+          "lot_id",
+          "lot_code",
+          "quantity",
+          "unit_price",
+          "discount",
+          "vat_class",
+          "tax_amount",
+          "unit_cost",
+          "from_suggestion",
+          "returned_quantity"
+        ],
+        "title": "SaleLineOut",
+        "type": "object"
+      },
+      "VoidIn": {
+        "properties": {
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "VoidIn",
+        "type": "object"
+      },
+      "Page_ReturnRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ReturnRow]",
+        "type": "object"
+      },
+      "ReturnDetail": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "sale_id": {
+            "format": "uuid",
+            "title": "Sale Id",
+            "type": "string"
+          },
+          "sale_number": {
+            "title": "Sale Number",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "occurred_at": {
+            "title": "Occurred At"
+          },
+          "recorded_at": {
+            "title": "Recorded At"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total"
+          },
+          "tax": {
+            "title": "Tax"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "refund_method": {
+            "enum": [
+              "cash",
+              "debit_card",
+              "credit_card",
+              "transfer",
+              "other"
+            ],
+            "title": "Refund Method",
+            "type": "string"
+          },
+          "returned_by_name": {
+            "title": "Returned By Name",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "sale_id",
+          "sale_number",
+          "location_id",
+          "location_name",
+          "occurred_at",
+          "recorded_at",
+          "item_count",
+          "total",
+          "tax",
+          "reason",
+          "refund_method",
+          "returned_by_name",
+          "lines"
+        ],
+        "title": "ReturnDetail",
+        "type": "object"
+      },
+      "ReturnLineOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sale_line_id": {
+            "format": "uuid",
+            "title": "Sale Line Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "unit_price": {
+            "title": "Unit Price"
+          },
+          "discount": {
+            "title": "Discount"
+          },
+          "vat_class": {
+            "enum": [
+              "excluded",
+              "exempt",
+              "rate_5",
+              "rate_19"
+            ],
+            "title": "Vat Class",
+            "type": "string"
+          },
+          "tax_amount": {
+            "title": "Tax Amount"
+          }
+        },
+        "required": [
+          "id",
+          "sale_line_id",
+          "item_id",
+          "item_name",
+          "lot_id",
+          "lot_code",
+          "quantity",
+          "unit_price",
+          "discount",
+          "vat_class",
+          "tax_amount"
+        ],
+        "title": "ReturnLineOut",
+        "type": "object"
+      },
+      "Page_ShiftRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ShiftRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ShiftRow]",
+        "type": "object"
+      },
+      "ShiftRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          },
+          "opened_at": {
+            "title": "Opened At"
+          },
+          "closed_at": {
+            "title": "Closed At"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "opening_float": {
+            "title": "Opening Float"
+          },
+          "cash_sales": {
+            "title": "Cash Sales"
+          },
+          "cash_returns": {
+            "title": "Cash Returns"
+          },
+          "expected_total": {
+            "title": "Expected Total"
+          },
+          "declared_total": {
+            "title": "Declared Total"
+          },
+          "variance": {
+            "title": "Variance"
+          },
+          "forced_close_reason": {
+            "title": "Forced Close Reason",
+            "type": "string"
+          },
+          "sale_count": {
+            "title": "Sale Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "device_id",
+          "device_label",
+          "user_id",
+          "user_name",
+          "opened_at",
+          "closed_at",
+          "status",
+          "opening_float",
+          "cash_sales",
+          "cash_returns",
+          "expected_total",
+          "declared_total",
+          "variance",
+          "forced_close_reason",
+          "sale_count"
+        ],
+        "title": "ShiftRow",
+        "type": "object"
+      },
+      "ShiftDetail": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "device_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Label"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          },
+          "opened_at": {
+            "title": "Opened At"
+          },
+          "closed_at": {
+            "title": "Closed At"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "opening_float": {
+            "title": "Opening Float"
+          },
+          "cash_sales": {
+            "title": "Cash Sales"
+          },
+          "cash_returns": {
+            "title": "Cash Returns"
+          },
+          "expected_total": {
+            "title": "Expected Total"
+          },
+          "declared_total": {
+            "title": "Declared Total"
+          },
+          "variance": {
+            "title": "Variance"
+          },
+          "forced_close_reason": {
+            "title": "Forced Close Reason",
+            "type": "string"
+          },
+          "sale_count": {
+            "title": "Sale Count",
+            "type": "integer"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/ShiftPaymentOut"
+            },
+            "title": "Payments",
+            "type": "array"
+          },
+          "sales": {
+            "items": {
+              "$ref": "#/components/schemas/SaleRow"
+            },
+            "title": "Sales",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "device_id",
+          "device_label",
+          "user_id",
+          "user_name",
+          "opened_at",
+          "closed_at",
+          "status",
+          "opening_float",
+          "cash_sales",
+          "cash_returns",
+          "expected_total",
+          "declared_total",
+          "variance",
+          "forced_close_reason",
+          "sale_count",
+          "payments",
+          "sales"
+        ],
+        "title": "ShiftDetail",
+        "type": "object"
+      },
+      "ShiftPaymentOut": {
+        "properties": {
+          "method": {
+            "enum": [
+              "cash",
+              "debit_card",
+              "credit_card",
+              "transfer",
+              "other"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "amount": {
+            "title": "Amount"
+          }
+        },
+        "required": [
+          "method",
+          "amount"
+        ],
+        "title": "ShiftPaymentOut",
+        "type": "object"
+      },
+      "ForceCloseIn": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ForceCloseIn",
         "type": "object"
       }
     },

@@ -485,8 +485,12 @@ def test_a_cashier_reads_the_catalog_without_costs_and_writes_nothing(
         == 403
     )
     assert client.get("/api/suppliers").status_code == 403
-    assert client.get("/api/customers").status_code == 403
     assert client.get("/api/imports").status_code == 403
+    # **`customers` is the exception, and S4 is why**: the counter attaches an
+    # acquirer to a ticket and registers one when the person is not on the
+    # till's local slice, so a cashier reads and writes that one table (ledger,
+    # S4's API surface).
+    assert client.get("/api/customers").status_code == 200
 
     # And an owner does see the figure, or the check above proves nothing.
     assert (

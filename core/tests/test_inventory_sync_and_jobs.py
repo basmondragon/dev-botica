@@ -54,9 +54,18 @@ def apply(device, rows, batch_id="batch-1"):
 
 
 def test_the_registry_carries_S3s_four_readable_collections(tenant_a, sede_a):
+    """S3's four, and they stay in the order a first sync needs -- the lots
+    before the stock that references them.
+
+    Read by name rather than by position, because S4 appended six of its own
+    behind them and a slice off the end of the tuple would make every later
+    amendment look like a regression here.
+    """
     names = [one.name for one in registry.COLLECTIONS]
-    assert names[-4:] == ["lots", "stock_on_hand", "stock_elsewhere", "stock_policies"]
-    assert registry.REGISTRY_VERSION == 2
+    for name in ("lots", "stock_on_hand", "stock_elsewhere", "stock_policies"):
+        assert name in names
+    assert names.index("lots") < names.index("stock_on_hand")
+    assert registry.REGISTRY_VERSION >= 2
 
 
 def test_a_write_only_collection_is_refused_by_the_pull(tenant_a):

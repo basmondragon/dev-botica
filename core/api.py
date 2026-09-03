@@ -296,9 +296,27 @@ def me(request):
 
 @api.get("/nav-counters", response=NavCountersOut, auth=any_member)
 def nav_counters(request):
-    """Empty at S0. S4 fills `counter` and S6 fills `purchasing`; a stage adds
-    its key here rather than fetching its own count."""
-    return {"counters": {}, "critical": []}
+    """§B.8.2 · the nav's counters. S6 fills `purchasing`; a stage adds its key
+    here rather than fetching its own count.
+
+    **`counter` is ventas abiertas, and only for an office identity.** A
+    `cashier` reads the same number from their own local store at zero latency
+    and never asks the server for it -- the till is the read model that knows,
+    and a nav counter that needed the network would be the one number on a till
+    surface that stops working when the cable comes out (§4, A4).
+    """
+    from core.counter.sales import open_sales
+
+    counters: dict[str, int] = {}
+    if request.user.role != Role.CASHIER:
+        try:
+            counters["counter"] = open_sales(
+                request.tenant_id,
+                scoping.readable_locations(request.user, request.tenant_id),
+            )
+        except scoping.Misconfigured:
+            counters = {}
+    return {"counters": counters, "critical": []}
 
 
 @api.get("/locations", response=list[LocationOut], auth=any_member)
@@ -905,6 +923,22 @@ api.add_router("", sync_router)
 from core.inventory.api import LineRefused, router as inventory_router  # noqa: E402
 
 api.add_router("", inventory_router)
+
+
+# ---------------------------------------------------------------------------
+# S4 · the counter
+#
+# The same rule again: a Router, not a second schema. Its paths already read
+# `/sales`, `/sale-returns` and `/shifts`, so the prefix is empty here too.
+#
+# Importing `core.counter.api` pulls in the package, which registers this
+# stage's six push writers with S2's endpoint -- so a sale rung up on a till
+# that was offline goes through S3's ledger service and not around it.
+# ---------------------------------------------------------------------------
+
+from core.counter.api import router as counter_router  # noqa: E402
+
+api.add_router("", counter_router)
 
 
 @api.exception_handler(LineRefused)

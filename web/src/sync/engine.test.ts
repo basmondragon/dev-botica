@@ -16,6 +16,7 @@ const DEVICE: DeviceRecord = {
   id: "11111111-1111-1111-1111-111111111111",
   key: "bkd_test",
   label: "Caja 1",
+  code: "C1",
   location_id: "22222222-2222-2222-2222-222222222222",
   location_name: "Chapinero",
   location_code: "CHA",

@@ -260,7 +260,15 @@ def test_a_seeded_lot_reads_as_a_history_and_never_dips_below_zero():
 def test_the_seeded_history_settles_before_the_documents_that_follow_it():
     """A dispatch at three days and a count closed at two have to land **after**
     the history that stocked the shelf they move. Interleaved, the trace shows a
-    transfer leaving a sede that had not received anything yet."""
+    transfer leaving a sede that had not received anything yet.
+
+    **S3's own documents, named rather than taken as "everything with a
+    document_type".** S4's sales are documents too and they span the whole
+    180-day window by design -- a shop sells the day after it stocks, not only
+    in the last fortnight -- so the property that matters for them is a
+    different one and S4's fixture states it: a sale is never dated before the
+    opening receipt that made it possible.
+    """
     tenant_id = seed("default")
     now = timezone.now()
     with pin_tenant(tenant_id):
@@ -275,9 +283,10 @@ def test_the_seeded_history_settles_before_the_documents_that_follow_it():
             .first()
         )
         documents = list(
-            StockMove.objects.filter(tenant_id=tenant_id)
-            .exclude(document_type="")
-            .values_list("recorded_at", flat=True)
+            StockMove.objects.filter(
+                tenant_id=tenant_id,
+                document_type__in=["transfers", "stock_counts"],
+            ).values_list("recorded_at", flat=True)
         )
     assert newest_history is not None
     assert documents

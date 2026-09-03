@@ -10,6 +10,7 @@ import {
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
 import { useMe, useNavCounters, type Me } from "@/api/queries";
+import { useOpenTicketCount } from "@/counter/local";
 import { AppVersionStamp } from "@/ui/app-version-stamp";
 import { BrandSquare } from "@/ui/brand";
 import { Button, type ButtonProps } from "@/ui/button";
@@ -178,6 +179,12 @@ function OrganisationHeader({
 function NavList({ me, collapsed }: { me: Me; collapsed: boolean }) {
   const location = useLocation();
   const counters = useNavCounters(me.role !== "cashier");
+  // §B.8.2 · **`Mostrador 3` is ventas abiertas, and a cashier reads it from
+  // their own local store** rather than from the server. A nav counter that
+  // needed the network would be the one number on a till surface that stops
+  // working when the cable comes out (§4, A4) -- so the office asks
+  // `/api/nav-counters` and the till counts its own tickets.
+  const local = useOpenTicketCount(me.role === "cashier");
   const visible = reachable(me.role);
 
   return (
@@ -191,7 +198,10 @@ function NavList({ me, collapsed }: { me: Me; collapsed: boolean }) {
         ) : (
           visible.map((item) => {
             const active = location.pathname.startsWith(item.to);
-            const count = counters.data?.counters[item.key] ?? 0;
+            const count =
+              item.key === "counter" && me.role === "cashier"
+                ? local
+                : (counters.data?.counters[item.key] ?? 0);
             const critical =
               counters.data?.critical.includes(item.key) ?? false;
             return (

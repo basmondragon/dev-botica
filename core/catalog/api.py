@@ -1403,7 +1403,12 @@ def _audit_link(request, action, row, *, before=None, after=None):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/customers", response=Page[CustomerOut], auth=owner_or_admin)
+#: **`any_member`, widened by S4.** The counter attaches a customer to a
+#: ticket and registers one when the person is not on the till's local
+#: slice, so a cashier reads this list -- S4's API surface names the three
+#: roles. Offline the same lookup is answered from the local store and this
+#: endpoint is not called at all (§4).
+@router.get("/customers", response=Page[CustomerOut], auth=any_member)
 def list_customers(
     request,
     q: str | None = Query(None),
@@ -1412,10 +1417,20 @@ def list_customers(
     sort: str | None = Query(None),
     order: SortOrder = Query("asc"),
 ):
-    """The clientes. `q` matches document and name."""
+    """The clientes. `q` matches document and name.
+
+    **A `cashier` must name who they are looking for.** The role reaches this
+    list so the counter can attach an acquirer to a ticket, which is always a
+    search for one person -- and an unfiltered page would hand a till the
+    network's whole customer table, with every document number, phone, email and
+    address on it. That is the data S2's recency window and its departure scrub
+    exist to keep off a device (Ley 1581, §7).
+    """
     rows = Customer.objects.filter(tenant_id=request.tenant_id)
-    if q and q.strip():
-        term = q.strip()
+    term = (q or "").strip()
+    if request.user.role == Role.CASHIER and len(term) < 3:
+        return {"rows": [], "row_count": 0, "page": 1, "page_size": page_size}
+    if term:
         rows = rows.filter(Q(name__icontains=term) | Q(document__icontains=term))
     rows = rows.order_by("name", "document")
     page_rows, row_count, page, page_size = paginate(
@@ -1440,7 +1455,11 @@ def list_customers(
     }
 
 
-@router.post("/customers", response=CustomerOut, auth=owner_or_admin)
+#: **`any_member`, widened by S4**, which is `customers`' only interactive
+#: writer (ledger). At a till the row is written locally and arrives through
+#: `POST /api/sync/push` under the natural key; this is the office's path to
+#: the same write, and the two converge on one row.
+@router.post("/customers", response=CustomerOut, auth=any_member)
 def create_customer(request, payload: CustomerIn):
     row = Customer(tenant_id=request.tenant_id)
     _apply_customer(row, payload.dict())

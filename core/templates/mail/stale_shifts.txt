@@ -1,0 +1,10 @@
+{{ tenant_name }} · {{ location_name }}
+
+{{ shifts|length }} turnos sin cerrar. Llevan más de un día abiertos.
+
+{% for shift in shifts %}- {{ shift.device }} · {{ shift.user_name|default:"—" }} · abierto {{ shift.opened_at|date:"d/m H:i" }}
+{% endfor %}
+Botica no los cierra por su cuenta: cerrar una caja sin contarla borra el conteo.
+Un cierre forzado no es un conteo y nunca se muestra como tal.
+
+{{ app_url }}/counter?segment=shifts&status=open

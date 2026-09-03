@@ -59,18 +59,19 @@ def test_a_customer_no_sale_references_is_deleted_outright(
 
 @pytest.mark.django_db
 def test_the_erasure_branch_counts_references_over_the_schema(customer):
-    """S4 adds `sales` to this count without editing S1.
+    """S4 added `sales` to this count without editing S1, which is what the
+    discovery over the schema was for.
 
-    The count is discovered from the relations pointing at `customers` rather
-    than from a list here, which is what makes that true -- and at S1 there are
-    none, so the assertion is that the count is zero and that nothing points at
-    the table yet.
+    The count is read from the relations pointing at `customers` rather than
+    from a list, so the arrival of a referencing table is picked up by the
+    branch and not by an edit here. A customer nothing has sold to still counts
+    zero, which is the branch that hard-deletes.
     """
     from core.catalog.api import _sales_referencing
 
     assert [
         relation.related_model.__name__ for relation in Customer._meta.related_objects
-    ] == []
+    ] == ["Sale"]
     assert _sales_referencing(customer) == 0
 
 

@@ -42,3 +42,10 @@ from core.sync import demo as sync  # noqa: E402,F401  -- registers "devices"
 # empty states. **It contributes no `stock_on_hand` rows** -- it moves stock
 # through the ledger service and lets the projection follow.
 from core.inventory import demo as inventory  # noqa: E402,F401  -- "stock"
+
+# S4's fixture: the turnos, the tickets, the payments and the returns -- the
+# sales history four later stages learn from, and the only history the product
+# has where a client's export does not exist (§1, *Cold start*). It consumes
+# stock through S3's ledger service exactly as a real sale does, which is why it
+# requires "stock" rather than merely running after it.
+from core.counter import demo as counter  # noqa: E402,F401  -- registers "counter"

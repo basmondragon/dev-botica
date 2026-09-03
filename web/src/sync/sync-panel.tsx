@@ -3,7 +3,7 @@ import { Button } from "@/ui/button";
 import { cn } from "@/ui/cn";
 import { DOT, count, decimal, since } from "@/ui/format";
 import { StatusDot } from "@/ui/status";
-import { QUEUE_LABELS } from "./registry";
+import { QUEUE_LABELS, queueGroups } from "./registry";
 import { storageUsedBytes } from "./device";
 import { useSync } from "./context";
 
@@ -78,7 +78,7 @@ export function SyncPanel({ className }: { className?: string }) {
 
   if (!sync.panelOpen || !sync.snapshot || !sync.device) return null;
   const snapshot = sync.snapshot;
-  const queue = Object.entries(snapshot.queue).filter(([, total]) => total > 0);
+  const queue = queueGroups(snapshot.queue);
   const skewSeconds =
     snapshot.clockSkewMs === null
       ? null
@@ -106,7 +106,8 @@ export function SyncPanel({ className }: { className?: string }) {
 
       {/* §B.9.3 · the pending queue broken down by kind. At S2 that is
           `Clientes 1`; S3 adds `Movimientos` and S4 `Ventas` by adding a label,
-          not a second queue. */}
+          not a second queue — and S4's own lines and payments are counted under
+          the sale they belong to rather than as rows of their own. */}
       <Line label="Pendientes por enviar">
         {queue.length === 0
           ? "Nada pendiente"

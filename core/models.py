@@ -1951,3 +1951,601 @@ class StockCountLine(TenantScopedModel):
 
     def __str__(self):
         return f"{self.item_id}: {self.counted_quantity}"
+
+
+# ---------------------------------------------------------------------------
+# S4 · the counter. Six tables and four enums (ledger, architecture §3, §6).
+#
+# **Nothing here is written by an endpoint.** Every sale, line, payment, shift
+# and return originates on a device and arrives through S2's
+# `POST /api/sync/push` (A5, §5 rule 5); the office's only mutations are a void
+# and a forced close, each of which moves a row that a till already wrote. A
+# second write path would be a second way to allocate `sales.number` and a
+# second way to move stock, and rule 7 has exactly one of the latter.
+#
+# **Money is stored tax-inclusive.** A Colombian shelf price includes IVA and
+# the handoff's own ticket confirms it -- `Subtotal $15.600 · Descuento $0 ·
+# Total $15.600`, with no tax line and no tax added to the total. So
+# `sale_lines.unit_price` is what the customer pays per base unit, `tax_amount`
+# is the IVA *contained* in the line, and `sales.tax` is inside `sales.total`
+# and never added to it. The arithmetic lives in `core.counter.money` and is
+# checked by a CHECK constraint below, because a build that added `tax` to
+# `total` would produce a ticket 19% too expensive on cosmetics and exactly
+# right on medicine -- the kind of defect a pilot finds three weeks in.
+#
+# **Quantities are base units, always** -- the same rule `stock_moves` follows
+# (§3). A `splittable` item's pack is `units_per_pack` base units and not a
+# second unit of measure, so nothing about a line, a move or the document handed
+# to an invoicing system distinguishes a box of twenty from twenty singles.
+#
+# Every table below carries the same S0 convention as the twenty-two above and
+# the client-write quartet rule 8 names; the policies live in migration 0012.
+# ---------------------------------------------------------------------------
+
+
+class ShiftStatus(models.TextChoices):
+    """**Coined** (S4, *Gated on*). §3 gives `shifts.status` a column and the
+    ledger's enum register gives it no name and no values.
+
+    Two, and there is no third. A forced close is a `closed` shift with a null
+    `declared_total` -- not a state of its own -- because a forced close is the
+    absence of a count and not a different kind of session, and a third value
+    would put that distinction in two places at once.
+    """
+
+    OPEN = "open", "Abierto"
+    CLOSED = "closed", "Cerrado"
+
+
+class SaleStatus(models.TextChoices):
+    """`open` is a ticket in progress and is what makes a crash mid-ticket cost
+    nothing: the row is written locally the moment its first line lands, and the
+    cashier finds the ticket where they left it (§5)."""
+
+    OPEN = "open", "Abierta"
+    CLOSED = "closed", "Cerrada"
+    VOIDED = "voided", "Anulada"
+
+
+class SaleSource(models.TextChoices):
+    """**S4 writes `counter`, S6 writes `imported`** (ledger, disputed columns).
+
+    An imported sale was rung up and invoiced in the client's previous system
+    long before Botica existed, so it must never appear in a shift, in a cash
+    reconciliation or in a fiscal handoff -- handing a month of history to an
+    invoicing system is a month of duplicate invoices (§8). The `CHECK` that
+    enforces the first of those is created here.
+    """
+
+    COUNTER = "counter", "Mostrador"
+    IMPORTED = "imported", "Historial cargado"
+
+
+class PaymentMethod(models.TextChoices):
+    """The name is coined (S4, *Gated on*); the five values are §3's verbatim."""
+
+    CASH = "cash", "Efectivo"
+    DEBIT_CARD = "debit_card", "Débito"
+    CREDIT_CARD = "credit_card", "Crédito"
+    TRANSFER = "transfer", "Transferencia"
+    OTHER = "other", "Otro"
+
+
+class ClientWrittenModel(TenantScopedModel):
+    """Rule 8's quartet, declared once for the six tables that carry it.
+
+    `client_uuid` is the till's own uuid v7 and `UNIQUE (tenant_id,
+    client_uuid)` -- declared per table, because a constraint needs a name --
+    is the whole of deduplication (A5). `occurred_at` is the device's clock,
+    stored exactly as it sent it and **never corrected** (§5 rule 4);
+    `recorded_at` is the server's, and it is the column every report and every
+    rollup reads.
+
+    `device` is `SET_NULL` rather than `PROTECT`, which is the opposite of the
+    choice `stock_moves` made: these tables are not append-only at the grant
+    level -- a sale is closed and voided in place -- so an `UPDATE` on the way
+    out is a statement the runtime role actually holds.
+
+    S3's two till-written tables declare the same four columns inline. They are
+    not moved onto this base: a migration that re-parents an existing table's
+    fields for tidiness is a migration with nothing to gain and a state to get
+    wrong.
+    """
+
+    client_uuid = models.UUIDField()
+    device = models.ForeignKey(
+        Device, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    occurred_at = models.DateTimeField(default=timezone.now)
+    recorded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        abstract = True
+
+
+class Shift(ClientWrittenModel):
+    """A **turno**: open with a float, sell, close with a declared count.
+
+    **`variance` is stored whether it is positive, negative or zero** (ledger,
+    disputed columns). A till that quietly reconciles its own shortfalls is a
+    till nobody can audit, and the whole reason a droguería's owner buys this
+    product is that today nobody can audit theirs (§6).
+
+    The drawer belongs to the **till**, not to the person: one open turno per
+    device, opened by whoever was signed in, sold into by whoever is signed in
+    at the time. `sales.sold_by_user_id` records who rang each ticket.
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    #: Who opened it. S0's referential rule: `SET_NULL` plus the stamped name,
+    #: so a shift whose cashier was later hard-deleted still says who counted
+    #: the drawer.
+    user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    user_name = models.CharField(max_length=200, blank=True)
+
+    opened_at = models.DateTimeField(default=timezone.now)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    opening_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    #: **Null only on a forced close**, which is the absence of a count rather
+    #: than a count of nothing. Zero is a real declared total and means the
+    #: drawer was emptied.
+    declared_total = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    variance = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    status = EnumField(
+        max_length=16,
+        choices=ShiftStatus,
+        db_enum="shift_status",
+        default=ShiftStatus.OPEN,
+    )
+    #: Why a turno was force-closed, stamped from the endpoint's own reason so
+    #: the Turnos list can say `Cierre forzado` without reading `audit_log`.
+    forced_close_reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "shifts"
+        ordering = ["-opened_at"]
+        indexes = [
+            # Rule 4 · S2's delta cursor, in the ledger's own four-column shape.
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="shifts_delta_cursor",
+            ),
+            models.Index(
+                fields=["tenant", "location", "-opened_at"], name="shifts_office_list"
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_shift_per_client_uuid"
+            ),
+            # **One open turno per device.** Partial, so a device accumulates
+            # any number of closed shifts and never a second open one -- which
+            # is what makes `sales.shift_id` unambiguous on a till that has been
+            # selling for a year.
+            models.UniqueConstraint(
+                fields=["tenant", "device"],
+                condition=models.Q(status=ShiftStatus.OPEN),
+                name="one_open_shift_per_device",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=ShiftStatus.values),
+                name="shift_status_is_declared",
+            ),
+            # An open turno has no close on it, and a closed one has one. A
+            # `closed_at` on an open shift is a row two screens would read
+            # differently.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=ShiftStatus.OPEN, closed_at__isnull=True)
+                    | models.Q(status=ShiftStatus.CLOSED, closed_at__isnull=False)
+                ),
+                name="a_closed_shift_has_a_close",
+            ),
+            # A count and its difference stand or fall together: `variance` is
+            # `declared_total - expected`, so a declared total with no variance
+            # beside it is an arithmetic nobody ran.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(declared_total__isnull=True, variance__isnull=True)
+                    | models.Q(declared_total__isnull=False, variance__isnull=False)
+                ),
+                name="a_declared_total_carries_its_variance",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.location_id} · {self.opened_at:%Y-%m-%d %H:%M}"
+
+
+class Sale(ClientWrittenModel):
+    """One ticket.
+
+    **`number` is the internal, per-location sale number and is not a fiscal
+    number** (ledger, disputed columns). Botica allocates no fiscal number at
+    v1 -- numbering leases and `dian_resolutions` are not built (A6) -- so the
+    fiscal number is whatever the receiving system issued, and `sales.number` is
+    the key both systems reconcile on (§8). It is composed
+    `{device code}-{per-device sequence}`, because the number must be
+    allocatable on a till with no connection and must never collide across two
+    tills in one sede, and the only mechanism that gives a bare integer that
+    property is a central allocator or a lease -- neither of which exists.
+
+    `customer` is `PROTECT` and is **neither `CASCADE` nor `SET_NULL`**: a
+    cascade deletes the sales when an administrator presses a legally required
+    button, and a `SET_NULL` keeps them and loses the acquirer S5 has to name on
+    the canonical document. S1's Ley 1581 deletion erases the identifying fields
+    in place and never deletes a referenced row, so this constraint is never
+    reached -- which is exactly what makes it the right one.
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    #: Null on an `imported` sale and never on a counter one -- the CHECK below
+    #: is what makes that structural.
+    shift = models.ForeignKey(
+        Shift, null=True, blank=True, on_delete=models.PROTECT, related_name="sales"
+    )
+    number = models.CharField(max_length=32)
+    status = EnumField(
+        max_length=16,
+        choices=SaleStatus,
+        db_enum="sale_status",
+        default=SaleStatus.OPEN,
+    )
+    source = EnumField(
+        max_length=16,
+        choices=SaleSource,
+        db_enum="sale_source",
+        default=SaleSource.COUNTER,
+    )
+    customer = models.ForeignKey(
+        Customer, null=True, blank=True, on_delete=models.PROTECT, related_name="sales"
+    )
+
+    #: The sum of line gross amounts **before** discount.
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    #: The IVA **contained** in `total`, never added to it.
+    tax = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    sold_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: S0's referential rule again: stamp the readable identity at write time,
+    #: so a receipt reprinted after a roster change still names the cashier.
+    sold_by_name = models.CharField(max_length=200, blank=True)
+
+    closed_at = models.DateTimeField(null=True, blank=True)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "sales"
+        ordering = ["-recorded_at"]
+        indexes = [
+            # Rule 4 · S2's delta cursor.
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="sales_delta_cursor",
+            ),
+            # Rule 4 · **named in the ledger as created by S4 and inherited by
+            # S9.** S4's office list -- sede plus period, the default view of
+            # `GET /api/sales` -- is the first read path that needs it, and an
+            # index is created once by the first stage that needs it.
+            models.Index(
+                fields=["tenant", "location", "recorded_at"],
+                name="sales_location_period",
+            ),
+            # The close report and the shift record panel.
+            models.Index(fields=["tenant", "shift"], name="sales_by_shift"),
+            # Rule 4 · **`Mostrador 3`.** The office's nav counter is a count of
+            # open counter sales, polled every thirty seconds by every office
+            # session; over the largest table in the product that is a scan of
+            # one sede's whole history for a number that is almost always
+            # single-digit. Partial, because the rows it counts are a vanishing
+            # share of the table and an index over the rest would be paid for on
+            # every ticket.
+            models.Index(
+                fields=["tenant", "location"],
+                condition=models.Q(status="open", source="counter"),
+                name="sales_open_at_the_counter",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_sale_per_client_uuid"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "location", "number"],
+                name="one_sale_number_per_location",
+            ),
+            # **A counter sale outside a turno cannot be reconciled, and an
+            # imported sale must never appear in one** (ledger).
+            models.CheckConstraint(
+                condition=~models.Q(source=SaleSource.COUNTER)
+                | models.Q(shift__isnull=False),
+                name="a_counter_sale_sits_in_a_shift",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=SaleStatus.values),
+                name="sale_status_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source__in=SaleSource.values),
+                name="sale_source_is_declared",
+            ),
+            # The money composition, in the database rather than in a service
+            # somebody could route around. `tax` is inside `total`, so it is
+            # bounded by it rather than added to it.
+            models.CheckConstraint(
+                condition=models.Q(total=models.F("subtotal") - models.F("discount")),
+                name="a_total_is_its_subtotal_less_its_discount",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tax__lte=models.F("total")),
+                name="tax_is_contained_in_the_total",
+            ),
+        ]
+
+    def __str__(self):
+        return self.number
+
+
+class SaleLine(ClientWrittenModel):
+    """One line of a ticket.
+
+    **`unit_cost` and `vat_class` are stamped at the moment of sale** (ledger,
+    disputed columns). Margin joined later to a lot's *current* cost is wrong
+    the first time a cost changes, and a tax class edited next month must not
+    restate what was charged today. Every margin figure on S9's Panel rests on
+    the first of those being stamped rather than derived.
+
+    `position` is **coined** (S4, *Gated on*): a ticket's line order is what the
+    cashier reads and what the receipt prints, and replicated rows arrive in no
+    order at all.
+
+    `location_id` is **denormalised from the parent**, and so is it on
+    `payments` and `sale_return_lines`. S2's delta cursor index is
+    `(tenant_id, location_id, updated_at, id)` on every synced table (rule 4); a
+    child that had to join its parent to answer the replication predicate would
+    turn a cursor scan into a per-row join on every pull, on the one query §4
+    budgets at under 20ms.
+    """
+
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="lines")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    position = models.PositiveIntegerField()
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    #: Null for a service and for an item whose `tracks_lots` is false. FEFO by
+    #: default; a cashier's override is recorded here **and** on the move S3's
+    #: service appends, which carries `fefo_override` (§6).
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    #: Base units, always. Positive: a line of nothing is not a line, and a
+    #: negative line is a return, which has its own table.
+    quantity = models.IntegerField()
+    #: What the customer pays per base unit, **IVA included**.
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    vat_class = EnumField(max_length=16, choices=VatClass, db_enum="vat_class")
+    #: The IVA contained in this line's net amount.
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    #: Stamped from the lot, or from `items.service_cost` where there is no lot.
+    #: Null means no cost was recorded, **never zero** (§B.9.2 tier 3).
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    #: Created here, defaulted false and **never written by this stage**
+    #: (ledger, disputed columns). S8 writes it when `Agregar` is pressed on a
+    #: suggestion card, and it is the single column that makes the Panel's
+    #: `58,6% de sugerencias aceptadas` answerable.
+    from_suggestion = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "sale_lines"
+        ordering = ["position"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="sale_lines_delta_cursor",
+            ),
+            models.Index(fields=["tenant", "sale"], name="sale_lines_by_sale"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_sale_line_per_client_uuid"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "sale", "position"],
+                name="one_line_per_position_per_sale",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0), name="a_sale_line_sells_something"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(vat_class__in=VatClass.values),
+                name="sale_line_vat_class_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} × {self.quantity}"
+
+
+class Payment(ClientWrittenModel):
+    """One method applied to one sale.
+
+    **`amount` is what was applied to the sale, not what was tendered.** Cash
+    tendered and the change given back are display figures on the receipt and
+    are not stored: the sale was paid for with `total`, however many notes
+    crossed the counter.
+    """
+
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    method = EnumField(max_length=16, choices=PaymentMethod, db_enum="payment_method")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    #: The voucher or transfer reference, for the three methods that have one.
+    reference = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        db_table = "payments"
+        ordering = ["method"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="payments_delta_cursor",
+            ),
+            models.Index(fields=["tenant", "sale"], name="payments_by_sale"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_payment_per_client_uuid"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(method__in=PaymentMethod.values),
+                name="payment_method_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0), name="a_payment_pays_something"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.method} {self.amount}"
+
+
+class SaleReturn(ClientWrittenModel):
+    """A **devolución** against a closed sale, whole or partial.
+
+    §3 fixes the behaviour and enumerates no columns; these are coined (S4,
+    *Gated on*). The sale it reverses stays `closed` -- a fully-returned sale is
+    a closed sale with returns against it, not a voided one -- and the credit
+    note a return legally requires is issued by the client's own invoicing
+    system, never by Botica (§8).
+    """
+
+    sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name="returns")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    #: The turno the **refund** came out of, which is not the turno the sale was
+    #: rung in: money leaves the drawer that is open now.
+    shift = models.ForeignKey(
+        Shift, null=True, blank=True, on_delete=models.PROTECT, related_name="returns"
+    )
+    number = models.CharField(max_length=32)
+    total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reason = models.TextField()
+    refund_method = EnumField(
+        max_length=16, choices=PaymentMethod, db_enum="payment_method"
+    )
+    returned_by_user = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    returned_by_name = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        db_table = "sale_returns"
+        ordering = ["-recorded_at"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="sale_returns_delta_cursor",
+            ),
+            models.Index(fields=["tenant", "sale"], name="sale_returns_by_sale"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"], name="one_return_per_client_uuid"
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "location", "number"],
+                name="one_return_number_per_location",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(refund_method__in=PaymentMethod.values),
+                name="refund_method_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(reason=""), name="a_return_states_its_reason"
+            ),
+        ]
+
+    def __str__(self):
+        return self.number
+
+
+class SaleReturnLine(ClientWrittenModel):
+    """One line of a return.
+
+    **Its money is stamped from the original sale line**, not from today's price
+    list: a credit note must reverse what was charged, and a price that changed
+    in between is exactly the case §5 says the sale's own record settles. The
+    stock goes back **to the lot the line originally sold**, or a recall becomes
+    unanswerable (§6).
+    """
+
+    sale_return = models.ForeignKey(
+        SaleReturn, on_delete=models.CASCADE, related_name="lines"
+    )
+    sale_line = models.ForeignKey(SaleLine, on_delete=models.PROTECT, related_name="+")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    quantity = models.IntegerField()
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    vat_class = EnumField(max_length=16, choices=VatClass, db_enum="vat_class")
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+
+    class Meta:
+        db_table = "sale_return_lines"
+        ordering = ["id"]
+        indexes = [
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="return_lines_delta_cursor",
+            ),
+            # The ledger's rule reads `(tenant_id, sale_id)` on each child; this
+            # table's parent id is the return's, and it is the one this table's
+            # own read path -- what remains returnable on a line -- ranges over.
+            models.Index(
+                fields=["tenant", "sale_return"], name="return_lines_by_return"
+            ),
+            # What remains returnable **per original line**, which is the figure
+            # the devolución's stepper is capped at.
+            models.Index(fields=["tenant", "sale_line"], name="return_lines_by_line"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"],
+                name="one_return_line_per_client_uuid",
+            ),
+            models.UniqueConstraint(
+                fields=["tenant", "sale_return", "sale_line"],
+                name="one_return_line_per_original_line",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="a_return_line_returns_something",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(vat_class__in=VatClass.values),
+                name="return_line_vat_class_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} × {self.quantity}"

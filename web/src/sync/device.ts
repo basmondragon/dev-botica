@@ -22,6 +22,11 @@ export interface DeviceRecord {
   id: string;
   key: string;
   label: string;
+  /** The till's short code, network-wide unique. **`sales.number` is composed
+   *  from it** — `{código}-{consecutivo}` — which is what makes a number
+   *  allocatable with no connection and impossible to collide across two tills
+   *  in one sede (§8). */
+  code: string;
   location_id: string;
   location_name: string;
   location_code: string;
@@ -78,6 +83,7 @@ export function recordFromClaim(claim: ClaimResponse): DeviceRecord {
     id: claim.device.id,
     key: claim.device_key,
     label: claim.device.label,
+    code: claim.device.code,
     location_id: claim.device.location_id,
     location_name: claim.device.location_name,
     location_code: "",

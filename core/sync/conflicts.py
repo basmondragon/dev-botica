@@ -43,6 +43,14 @@ ALLOWED_DETAIL_KEYS = frozenset(
         "quantity",
         "documents",
         "key",
+        # S4's two reconciliations: which line of which sale, what was charged,
+        # what the price list says now, and the state the catalog is in. A
+        # figure and an id, and nothing a person is identified by -- the rule
+        # this list exists to keep.
+        "line_id",
+        "charged",
+        "effective",
+        "state",
     }
 )
 

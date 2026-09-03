@@ -378,6 +378,22 @@ def test_every_registry_collection_leaves_by_an_update_or_is_declared():
         ),
         "receipt_lines": "write-only — a device sends it and never reads it back",
         "stock_count_lines": ("write-only — a device sends it and never reads it back"),
+        # S4 · the six the till reads *and* writes. Five of them leave by the
+        # seven-day window on the sale's own `occurred_at` and one by the
+        # thirty-day window on the shift's `opened_at`; in every case the row
+        # ages out behind the device's cursor rather than arriving as a
+        # departure, and the digest repairs it within a day — the same shape
+        # `customers` takes, and for the same reason.
+        "shifts": "the thirty-day window on opened_at, repaired by the digest",
+        "sales": (
+            "the seven-day window on occurred_at, repaired by the digest — and "
+            "an `open` sale never leaves at all, because a stranded ticket is "
+            "exactly the row a till must not lose sight of"
+        ),
+        "sale_lines": "its sale's window, resolved over the page by enrich",
+        "payments": "its sale's window, resolved over the page by enrich",
+        "sale_returns": "the seven-day window on occurred_at",
+        "sale_return_lines": "its return's window, resolved over the page by enrich",
     }
     assert set(departure) == set(registry.BY_NAME), (
         "a collection was added to the registry without saying how a row leaves "

@@ -15,6 +15,7 @@ const DEVICE: DeviceRecord = {
   id: "11111111-1111-1111-1111-111111111111",
   key: "bkd_test",
   label: "Caja 1",
+  code: "C1",
   location_id: "22222222-2222-2222-2222-222222222222",
   location_name: "Chapinero",
   location_code: "CHA",
@@ -128,4 +129,17 @@ describe("§ the poll schedule · push before pull", () => {
     expect(order[0]).toBe("push");
     expect(order.indexOf("push")).toBeLessThan(order.indexOf("pull"));
   }, 20000);
+});
+
+describe("uuid v7 inside one millisecond", () => {
+  it("keeps minting in order, which is what the push applies a batch in", async () => {
+    // **S4 is what makes this load-bearing**: a sale's close event, its
+    // payments and its lines are minted in the same millisecond, and a key that
+    // fell back on randomness inside one would let a payment arrive before the
+    // sale it pays for.
+    const { uuidV7 } = await import("./outbox");
+    const keys = Array.from({ length: 500 }, () => uuidV7());
+    expect(keys).toEqual([...keys].sort());
+    expect(new Set(keys).size).toBe(keys.length);
+  });
 });
