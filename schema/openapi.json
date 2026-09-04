@@ -4895,6 +4895,480 @@
           }
         ]
       }
+    },
+    "/api/fiscal-documents": {
+      "get": {
+        "operationId": "core_fiscal_api_list_fiscal_documents",
+        "summary": "List Fiscal Documents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "sent",
+                      "acknowledged",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "target",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_DocumentRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "`Envíos a facturación`, server-paginated per the grid contract.\n\n**`status` takes several values, and that is not a convenience.** The work\nlist's first segment is everything that has not settled -- `pending` *and*\n`sent` -- and filtering that in the browser would filter one server page\nafter the server had already paginated: on a tenant whose newest rows are\nall `acknowledged`, page one would drop every row and the screen would\nannounce that nothing is pending while the footer counted hundreds. The\nfilter belongs where the pagination is, and it is what the\n`(tenant, location, status, created_at)` index was migrated for.\n\n**Unconfigured it still resolves and returns nothing**, which is what lets\nthe route render §B.10.2's never-populated empty state rather than a 404 --\na route that refused would be indistinguishable from a broken link.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/fiscal-documents/unsent-sales": {
+      "get": {
+        "operationId": "core_fiscal_api_list_unsent_sales",
+        "summary": "List Unsent Sales",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_OrphanRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "`Ventas sin enviar` -- the orphan check's own list.\n\n**Reported, never repaired** (*Jobs*). A document recreated by a sweep would\nhide the defect that produced the hole, and the one thing worse than a\nmissing document is a mechanism that manufactures documents nobody can\naccount for.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/fiscal-documents/summary": {
+      "get": {
+        "operationId": "core_fiscal_api_read_summary",
+        "summary": "Read Summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "`configured`, and when true the counts S9's Panel reads.\n\n**When false the body carries no counts at all** -- absent, not zero (§8).\nS9 renders nothing whatsoever: no strip, no tile, no clause appended to the\nfreshness line.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/fiscal-documents/exports": {
+      "get": {
+        "operationId": "core_fiscal_api_list_exports",
+        "summary": "List Exports",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExportRow"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "The generated export files, with their period, their count and a link.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/fiscal-documents/{document_id}": {
+      "get": {
+        "operationId": "core_fiscal_api_read_fiscal_document",
+        "summary": "Read Fiscal Document",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One handoff: its key, its target and mapping version, the payload, the\nattempt trail, the parsed response and its identifiers where they exist.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/fiscal-documents/{document_id}/retry": {
+      "post": {
+        "operationId": "core_fiscal_api_retry_fiscal_document",
+        "summary": "Retry Fiscal Document",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Force an attempt now, **rebuilding the payload from the sale as it now\nstands**.\n\nIdempotent against the job's own queueing lock: pressing it twice enqueues\none attempt. Nothing about the fiscal row is edited beyond its state, no\nmigration is written, and no correction is typed into a document.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sales/{sale_id}/canonical-document": {
+      "get": {
+        "operationId": "core_fiscal_api_read_canonical_document",
+        "summary": "Read Canonical Document",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sale_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Sale Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "description": "Render the canonical payload for one sale **without sending it**.\n\nThis is how a mapping gets written: the first hour of integrating a client's\nsystem is spent answering *\"what exactly do you send?\"*, and a screen that\nanswers it turns a week of emails into an afternoon.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/sales/{sale_id}/fiscal-document": {
+      "get": {
+        "operationId": "core_fiscal_api_read_sale_fiscal_document",
+        "summary": "Read Sale Fiscal Document",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sale_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Sale Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaleFiscalOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The handoff of one sale, for the sale detail and a reprint.\n\n**For a `cashier` it returns the identifiers and never a status** (§8). With\nno target configured, or with nothing returned, the body is\n`{\"configured\": false}` and the region renders nothing at all -- not a\nplaceholder, not a status, and never a skeleton that will not resolve.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/invoicing": {
+      "get": {
+        "operationId": "core_fiscal_api_read_invoicing_settings",
+        "summary": "Read Invoicing Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicingSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_fiscal_api_write_invoicing_settings",
+        "summary": "Write Invoicing Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicingSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write the group through S0's helper, which issues one `jsonb_set` and\nleaves every other group as it stands (ledger rule 5).\n\n**`target` is an API-key setting and is therefore `owner` only** (§2): naming\na target is what decides which credential is read out of the secrets store,\nand §2 withholds billing and API-key settings from `admin`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoicingSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -12596,6 +13070,1001 @@
           "reason"
         ],
         "title": "ForceCloseIn",
+        "type": "object"
+      },
+      "DocumentRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "document_key": {
+            "title": "Document Key",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "sale",
+              "credit_note"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "sale_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Id"
+          },
+          "sale_number": {
+            "title": "Sale Number",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "target_label": {
+            "title": "Target Label",
+            "type": "string"
+          },
+          "mapping_version": {
+            "title": "Mapping Version",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "sent",
+              "acknowledged",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "external_number": {
+            "title": "External Number",
+            "type": "string"
+          },
+          "cude": {
+            "title": "Cude",
+            "type": "string"
+          },
+          "pdf_url": {
+            "title": "Pdf Url",
+            "type": "string"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_key",
+          "type",
+          "location_id",
+          "location_name",
+          "sale_id",
+          "sale_number",
+          "target",
+          "target_label",
+          "mapping_version",
+          "status",
+          "attempts",
+          "next_attempt_at",
+          "created_at",
+          "sent_at",
+          "acknowledged_at",
+          "external_number",
+          "cude",
+          "pdf_url",
+          "error"
+        ],
+        "title": "DocumentRow",
+        "type": "object"
+      },
+      "Page_DocumentRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[DocumentRow]",
+        "type": "object"
+      },
+      "OrphanRow": {
+        "description": "A sale, not a document, so it carries no badge column. Each row states in\nwords why no document exists.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "sale",
+              "credit_note"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "sale_id": {
+            "format": "uuid",
+            "title": "Sale Id",
+            "type": "string"
+          },
+          "sale_number": {
+            "title": "Sale Number",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "number",
+          "sale_id",
+          "sale_number",
+          "location_id",
+          "location_name",
+          "recorded_at",
+          "reason"
+        ],
+        "title": "OrphanRow",
+        "type": "object"
+      },
+      "Page_OrphanRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/OrphanRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[OrphanRow]",
+        "type": "object"
+      },
+      "LocationCount": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "unsent": {
+            "title": "Unsent",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "unsent",
+          "failed"
+        ],
+        "title": "LocationCount",
+        "type": "object"
+      },
+      "SummaryOut": {
+        "description": "**Two shapes, and the difference is the contract S9 is built against.**\n\nUnconfigured, the body's only key is `configured: false`: every other field\nis `None` and the endpoint is declared `exclude_none`, so an answer that\ncarries no counts cannot be rendered as one.",
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "unsent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unsent"
+          },
+          "failed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed"
+          },
+          "oldest_unsent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Unsent At"
+          },
+          "by_location": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LocationCount"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By Location"
+          }
+        },
+        "required": [
+          "configured"
+        ],
+        "title": "SummaryOut",
+        "type": "object"
+      },
+      "ExportRow": {
+        "properties": {
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "file": {
+            "title": "File",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "period",
+          "document_count",
+          "file",
+          "url"
+        ],
+        "title": "ExportRow",
+        "type": "object"
+      },
+      "DocumentDetail": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "document_key": {
+            "title": "Document Key",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "sale",
+              "credit_note"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "sale_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Id"
+          },
+          "sale_number": {
+            "title": "Sale Number",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "target_label": {
+            "title": "Target Label",
+            "type": "string"
+          },
+          "mapping_version": {
+            "title": "Mapping Version",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "sent",
+              "acknowledged",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "external_number": {
+            "title": "External Number",
+            "type": "string"
+          },
+          "cude": {
+            "title": "Cude",
+            "type": "string"
+          },
+          "pdf_url": {
+            "title": "Pdf Url",
+            "type": "string"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "payload_is_current_render": {
+            "title": "Payload Is Current Render",
+            "type": "boolean"
+          },
+          "response": {
+            "additionalProperties": true,
+            "title": "Response",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "document_key",
+          "type",
+          "location_id",
+          "location_name",
+          "sale_id",
+          "sale_number",
+          "target",
+          "target_label",
+          "mapping_version",
+          "status",
+          "attempts",
+          "next_attempt_at",
+          "created_at",
+          "sent_at",
+          "acknowledged_at",
+          "external_number",
+          "cude",
+          "pdf_url",
+          "error",
+          "payload",
+          "payload_is_current_render",
+          "response"
+        ],
+        "title": "DocumentDetail",
+        "type": "object"
+      },
+      "SaleFiscalOut": {
+        "description": "The sale's fiscal read-out.\n\n**For a `cashier` this carries the identifiers and no `status` at all**: a\nfiscal state is an administrator's work list and not a cashier's (§8), and a\nkey that is absent cannot be rendered as a badge by mistake.",
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "external_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Number"
+          },
+          "cude": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cude"
+          },
+          "pdf_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Url"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "sent",
+                  "acknowledged",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "document_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Key"
+          }
+        },
+        "required": [
+          "configured"
+        ],
+        "title": "SaleFiscalOut",
+        "type": "object"
+      },
+      "InvoicingDelivery": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "per_sale",
+              "batched"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "csv",
+              "json"
+            ],
+            "title": "Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "prefix",
+          "format"
+        ],
+        "title": "InvoicingDelivery",
+        "type": "object"
+      },
+      "InvoicingRetry": {
+        "properties": {
+          "cap_hours": {
+            "title": "Cap Hours",
+            "type": "integer"
+          },
+          "dwell_minutes": {
+            "title": "Dwell Minutes",
+            "type": "integer"
+          },
+          "clock_skew_hours": {
+            "title": "Clock Skew Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cap_hours",
+          "dwell_minutes",
+          "clock_skew_hours"
+        ],
+        "title": "InvoicingRetry",
+        "type": "object"
+      },
+      "InvoicingSettingsOut": {
+        "properties": {
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "environment": {
+            "enum": [
+              "test",
+              "production"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "configured_at": {
+            "title": "Configured At",
+            "type": "string"
+          },
+          "mapping": {
+            "title": "Mapping",
+            "type": "string"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/InvoicingDelivery"
+          },
+          "retry": {
+            "$ref": "#/components/schemas/InvoicingRetry"
+          },
+          "notifications": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notifications",
+            "type": "array"
+          },
+          "credential_resolved": {
+            "title": "Credential Resolved",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "held": {
+            "title": "Held",
+            "type": "integer"
+          },
+          "available_targets": {
+            "items": {
+              "$ref": "#/components/schemas/TargetOption"
+            },
+            "title": "Available Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "target",
+          "environment",
+          "base_url",
+          "configured_at",
+          "mapping",
+          "delivery",
+          "retry",
+          "notifications",
+          "credential_resolved",
+          "enabled",
+          "held",
+          "available_targets"
+        ],
+        "title": "InvoicingSettingsOut",
+        "type": "object"
+      },
+      "TargetOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_base_url": {
+            "title": "Needs Base Url",
+            "type": "boolean"
+          },
+          "needs_credential": {
+            "title": "Needs Credential",
+            "type": "boolean"
+          },
+          "mappings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Mappings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "needs_base_url",
+          "needs_credential",
+          "mappings"
+        ],
+        "title": "TargetOption",
+        "type": "object"
+      },
+      "InvoicingDeliveryIn": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "per_sale",
+                  "batched"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prefix"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "csv",
+                  "json"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          }
+        },
+        "title": "InvoicingDeliveryIn",
+        "type": "object"
+      },
+      "InvoicingRetryIn": {
+        "properties": {
+          "cap_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cap Hours"
+          },
+          "dwell_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dwell Minutes"
+          },
+          "clock_skew_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Skew Hours"
+          }
+        },
+        "title": "InvoicingRetryIn",
+        "type": "object"
+      },
+      "InvoicingSettingsIn": {
+        "properties": {
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "enum": [
+                  "test",
+                  "production"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvoicingDeliveryIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvoicingRetryIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notifications": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notifications"
+          }
+        },
+        "title": "InvoicingSettingsIn",
         "type": "object"
       }
     },

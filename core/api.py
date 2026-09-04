@@ -941,6 +941,24 @@ from core.counter.api import router as counter_router  # noqa: E402
 api.add_router("", counter_router)
 
 
+# ---------------------------------------------------------------------------
+# S5 · the handoff
+#
+# The same rule again: a Router, not a second schema. Its paths already read
+# `/fiscal-documents`, `/sales/{id}/canonical-document`,
+# `/sales/{id}/fiscal-document` and `/settings/invoicing`, so the prefix is
+# empty here too.
+#
+# **No endpoint here is one a till calls**, and there is no unauthenticated
+# inbound path at all: a target that reports asynchronously is polled through
+# its mapping's query operation rather than calling us back (S5, ledger rule 6).
+# ---------------------------------------------------------------------------
+
+from core.fiscal.api import router as fiscal_router  # noqa: E402
+
+api.add_router("", fiscal_router)
+
+
 @api.exception_handler(LineRefused)
 def _line_refused(request, exc):
     """One refused line of a multi-line entry, at field scope (§B.10.3).

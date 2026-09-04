@@ -181,14 +181,14 @@ def test_the_seeded_sales_moved_stock_through_the_ledger_service():
 
         # No invoicing target is configured, nothing is handed anywhere, and
         # that is the default state rather than an error (§8).
-        from django.db import connection
+        #
+        # **Written before S5 existed as "the table is not there yet", and now
+        # checked as what it always meant.** The table exists from S5 onward and
+        # the seeded tenant holds no row in it, which is the stronger claim: an
+        # absent table proves nothing about a product that ships one.
+        from core.models import FiscalDocument
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT count(*) FROM information_schema.tables "
-                "WHERE table_name = 'fiscal_documents'"
-            )
-            assert cursor.fetchone()[0] == 0
+        assert not FiscalDocument.objects.exists()
 
 
 def test_the_young_profile_is_a_young_network_and_not_a_young_sede():

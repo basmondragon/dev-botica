@@ -2256,6 +2256,18 @@ class Sale(ClientWrittenModel):
                 condition=models.Q(status="open", source="counter"),
                 name="sales_open_at_the_counter",
             ),
+            # Rule 4 · **migrated onto this table by S5**, which is the stage
+            # whose read path needs it: the orphan check, which finds a closed
+            # counter sale holding no `fiscal_documents` row after the invoicing
+            # target's `configured_at`. Distinct from `sales_location_period`
+            # above -- that one is sede-first and serves a period list, this one
+            # is period-first over the whole network and serves one sweep -- and
+            # neither substitutes for the other.
+            models.Index(
+                fields=["tenant", "recorded_at"],
+                condition=models.Q(status="closed", source="counter"),
+                name="sales_closed_for_handoff",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -2549,3 +2561,166 @@ class SaleReturnLine(ClientWrittenModel):
 
     def __str__(self):
         return f"{self.item_id} × {self.quantity}"
+
+
+# ---------------------------------------------------------------------------
+# S5 · the handoff. One table and one enum (ledger, architecture §3, §8).
+#
+# **Botica issues no fiscal document.** It allocates no fiscal number, generates
+# no CUDE, signs no XML and speaks no DIAN protocol (§8, A9, §12). This table
+# records one thing: that a complete, correct sale was handed to whatever
+# invoicing system the client already runs, exactly once, and what came back.
+#
+# **With no target configured there are no rows at all** -- the default, the
+# state every demo runs in, and a supported configuration rather than a broken
+# one (§8). Nothing here is written, no job is queued, and no surface mentions
+# the subject.
+#
+# The table carries the same S0 convention as the twenty-eight above; its policy
+# lives in migration 0014. It carries **no client-write quartet**: no till writes
+# it, no device reaches it, and rule 9's registry is not amended by this stage.
+# ---------------------------------------------------------------------------
+
+
+class FiscalDocumentStatus(models.TextChoices):
+    """The ledger's four, and they describe **our handoff** rather than the
+    DIAN's filing (§8, A9).
+
+    Botica hands a document to the client's invoicing system and never learns
+    what the DIAN did with it, so there is no `accepted`, no `rejected` and no
+    `contingency` -- a label claiming a DIAN outcome would be a claim about a
+    filing this product did not perform and cannot see.
+    """
+
+    PENDING = "pending", "Pendiente de envío"
+    SENT = "sent", "Enviado"
+    ACKNOWLEDGED = "acknowledged", "Confirmado"
+    FAILED = "failed", "Falló el envío"
+
+
+class FiscalDocument(TenantScopedModel):
+    """One handoff of one sale, or of one credit note against it.
+
+    **`document_key` is the far end's dedupe key and is derived from the sale**
+    (ledger, disputed columns): `{location.code}-{sales.number}` for a sale and
+    `{location.code}-{sales.number}-NC{n}` for the n-th credit note against it.
+    It carries no timestamp, no attempt counter and no random component, because
+    anything that varies per attempt destroys the only guarantee it exists to
+    provide. `UNIQUE (tenant_id, document_key)` puts that guarantee in the
+    database rather than in the job.
+
+    **A document is a credit note exactly when it is not the sale's own base
+    key.** No `fiscal_document_type` enum is created: a column duplicating the
+    fact the key already carries would eventually disagree with it, and a row
+    whose type said `sale` while it reversed one is a defect no constraint
+    catches. A return's credit note hangs off `sale_return_id`; a **void's**
+    hangs off `sale_id` with the `-NC{n}` suffix, because a void writes no
+    `sale_returns` row and the units came back through S4's own reversal.
+
+    **The payload is evidence, not input.** The canonical document is a pure
+    function of the sale and the mapping version in force, built when it is
+    about to be sent; `payload` records what was actually sent on the last
+    attempt and nothing reads it back to re-send. That is what lets an instance
+    run unconfigured for months and lose nothing, and what makes a correction
+    upstream picked up by the next retry.
+    """
+
+    #: Exactly one of the two is set, and the CHECK below is what makes that
+    #: structural. A void's credit note sets `sale`.
+    sale = models.ForeignKey(
+        Sale, null=True, blank=True, on_delete=models.PROTECT, related_name="documents"
+    )
+    sale_return = models.ForeignKey(
+        SaleReturn,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="documents",
+    )
+    #: **Coined.** Denormalised from the sale so the work list's per-sede filter
+    #: and the summary's per-sede count are one indexed read rather than a join
+    #: through `sales` on the largest table in the product.
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+
+    document_key = models.CharField(max_length=96)
+    #: Which target it is bound for -- the id of a registered target, never a
+    #: vendor's name in prose.
+    target = models.CharField(max_length=32)
+    #: **Coined.** Which mapping produced the stored `payload`. A delivery that
+    #: succeeded a year ago and fails today is otherwise indistinguishable from
+    #: a target that changed its API.
+    mapping_version = models.CharField(max_length=32, blank=True)
+
+    payload = models.JSONField(default=dict, blank=True)
+    status = EnumField(
+        max_length=16,
+        choices=FiscalDocumentStatus,
+        db_enum="fiscal_document_status",
+        default=FiscalDocumentStatus.PENDING,
+    )
+    attempts = models.PositiveIntegerField(default=0)
+    #: **Coined, and null means held rather than queued.** A document outside
+    #: the clock-skew tolerance, or bound for a target that can neither dedupe
+    #: nor be queried after an ambiguous outcome, sits here with a reason in
+    #: `error` and waits for a person.
+    next_attempt_at = models.DateTimeField(null=True, blank=True)
+
+    sent_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+
+    #: Whatever the receiving system returns, **where it returns anything**
+    #: (ledger, disputed columns). Null is normal and is not a failure: the
+    #: handoff succeeding is what `acknowledged` records. Never generated
+    #: locally (A9).
+    external_number = models.CharField(max_length=64, blank=True)
+    cude = models.CharField(max_length=128, blank=True)
+    pdf_url = models.TextField(blank=True)
+    #: The target's raw answer. Read in Django admin and never rendered to a
+    #: user (§B.10.3).
+    response = models.JSONField(default=dict, blank=True)
+    #: One sentence in Spanish that a person can act on. Never a bare HTTP
+    #: status, never a stack trace, never a vendor payload.
+    error = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "fiscal_documents"
+        ordering = ["-created_at"]
+        indexes = [
+            # The sweep's "what is due" query. Partial, because a settled
+            # document is the overwhelming majority of the table and an index
+            # over it would be paid for on every acknowledgement.
+            models.Index(
+                fields=["tenant", "status", "next_attempt_at"],
+                condition=models.Q(status__in=("pending", "sent", "failed")),
+                name="fiscal_documents_due",
+            ),
+            # The work list's filtered, sorted page and the summary's counts.
+            models.Index(
+                fields=["tenant", "location", "status", "-created_at"],
+                name="fiscal_documents_list",
+            ),
+            models.Index(fields=["tenant", "sale"], name="fiscal_documents_by_sale"),
+        ]
+        constraints = [
+            # **The exactly-once invariant, in the database rather than in the
+            # job.** Because the key is derived from the sale, a second row for
+            # one document is impossible by construction -- which is stronger
+            # than a uniqueness rule the delivery job promises to honour.
+            models.UniqueConstraint(
+                fields=["tenant", "document_key"], name="one_document_per_key"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(sale__isnull=False, sale_return__isnull=True)
+                    | models.Q(sale__isnull=True, sale_return__isnull=False)
+                ),
+                name="a_document_names_a_sale_or_a_return",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=FiscalDocumentStatus.values),
+                name="fiscal_document_status_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return self.document_key

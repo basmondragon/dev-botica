@@ -1,6 +1,7 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import {
   Building2,
+  FileText,
   FlaskConical,
   MonitorSmartphone,
   ScrollText,
@@ -27,10 +28,11 @@ const OFFICE: Role[] = ["owner", "admin", "platform_admin"];
  * inside its body.
  *
  * S0 shipped three items under **Organización** and **Registros**; S1 adds the
- * **Catálogo** group and its three; S2 adds **Sedes y dispositivos**. The rest
- * of the rail design-system names -- Facturación electrónica, Precios y topes,
- * Asistente, Cumplimiento, Exportaciones -- is added by the stages that own
- * those sections.
+ * **Catálogo** group and its three; S2 adds **Sedes y dispositivos**; S5 adds
+ * the **Operación** group and its first section, Facturación electrónica. The
+ * rest of the rail design-system names -- Precios y topes, Asistente,
+ * Cumplimiento, Exportaciones -- is added by the stages that own those
+ * sections.
  *
  * **The `sync` settings group is a block inside `Sedes y dispositivos`, not a
  * tenth rail item.** §B.8.4·4 fixes nine sections and none of them is
@@ -80,6 +82,20 @@ export const SETTINGS: SettingsSection[] = [
     roles: OFFICE,
   },
   {
+    // §B.8.4·4 · **Operación**, and S5's is the group's first section.
+    //
+    // **This is the only surface in the product that ever mentions the handoff
+    // being off** (architecture §8), which is why the section is in the rail
+    // for every office role even when nothing is connected: it is where a
+    // person goes to turn it on, and a section that appeared only once it was
+    // already on would be one nobody could reach.
+    id: "invoicing",
+    label: "Facturación electrónica",
+    group: "Operación",
+    icon: FileText,
+    roles: OFFICE,
+  },
+  {
     id: "activity",
     label: "Actividad",
     group: "Registros",
@@ -91,6 +107,7 @@ export const SETTINGS: SettingsSection[] = [
 export const SETTINGS_GROUPS = [
   "Organización",
   "Catálogo",
+  "Operación",
   "Registros",
 ] as const;
 

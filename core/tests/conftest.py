@@ -161,3 +161,17 @@ def client_as(client):
         return client
 
     return _sign_in
+
+
+@pytest.fixture
+def storage_root(settings, tmp_path):
+    """Object storage, per test, under a temporary root (architecture §10).
+
+    S5's file export and its loopback target both write through Django's
+    `default` storage. Pointing `MEDIA_ROOT` at a fresh directory is what keeps
+    one test's export files and another's loopback log from being the same
+    bucket -- and it is also what a deploy does, one line higher up, when it
+    swaps the backend for an S3-compatible one.
+    """
+    settings.MEDIA_ROOT = str(tmp_path / "media")
+    return settings.MEDIA_ROOT

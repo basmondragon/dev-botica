@@ -142,3 +142,31 @@ def send_stale_shifts(*, recipients, tenant_name, location_name, run_date, shift
             },
         )
     return outcome
+
+
+def send_failed_deliveries(*, recipients, tenant_name, run_date, documents):
+    """Deliveries the client's invoicing system has not taken, to whoever asked.
+
+    **It reports and never resends.** The work list is the record and this is a
+    pointer to it -- a failure that exists only in an inbox is a failure nobody
+    resolved (S5, *Jobs*). No link in it delivers anything, and nothing in it
+    names the DIAN: Botica hands documents to the client's own system and never
+    learns what the DIAN did with them (§8, A9).
+
+    One message per recipient, for the reason `send_stale_shifts` gives: a
+    droguería's owner and its administrators are people, not a mailing list, and
+    a `To` header naming all three publishes their addresses to each other.
+    """
+    outcome = NOT_CONFIGURED
+    for email in recipients:
+        outcome = _send(
+            "failed_deliveries",
+            email,
+            f"{tenant_name}: {len(documents)} envíos a facturación sin resolver",
+            {
+                "tenant_name": tenant_name,
+                "run_date": run_date,
+                "documents": documents,
+            },
+        )
+    return outcome

@@ -26,6 +26,7 @@ import {
   SearchField,
 } from "@/ui/filter-bar";
 import { DOT, count as formatCount, money, since, time } from "@/ui/format";
+import { SaleFiscalReadOut } from "@/fiscal/sale-read-out";
 import { Modal, RecordPanel } from "@/ui/panel";
 import { Segmented } from "@/ui/segmented";
 import { Badge, StatusLine } from "@/ui/status";
@@ -583,6 +584,12 @@ function SalePanel({
                 </ul>
               </div>
             ) : null}
+
+            {/* S5's read-out. **Nothing at all** when the client's invoicing
+                system returned nothing, when the handoff has not landed, or
+                when no target is configured -- which is the default and the
+                state every demo runs in (§8). */}
+            <SaleFiscalReadOut saleId={sale.id} />
 
             {/* **A devolución is registered at the counter**, which is where the
                 stock and the customer are. The office reads them and starts

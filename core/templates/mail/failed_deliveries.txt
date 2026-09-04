@@ -1,0 +1,10 @@
+{{ tenant_name }}
+
+{{ documents|length }} envíos al sistema de facturación quedaron sin resolver.
+
+{% for document in documents %}- {{ document.document_key }} · {{ document.location }} · {{ document.error }}
+{% endfor %}
+Botica entrega la venta al sistema de facturación de la droguería y registra lo
+que ese sistema responde. No emite documentos y no informa nada a la DIAN.
+
+{{ app_url }}/fiscal-documents?lista=fallidos

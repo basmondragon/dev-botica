@@ -13,6 +13,12 @@ move carries a deterministic natural key -- `sale_line:{id}`,
 and a re-run seed are all no-ops at the ledger, exactly as a duplicated batch is
 at the push.
 
+**S5's handoff hangs off two functions here and nothing else** -- `close` and
+`void`. This module assembles no payload, knows no target's field names and
+waits for no target; the service it calls writes at most one `fiscal_documents`
+row inside this transaction and returns `None` when no invoicing system is
+connected, which is the default (§8, ledger cross-stage services).
+
 **Two of §5's three reconciliations are raised here**, as an offline sale
 arrives, one row per offending line and never as a refusal: `stale_price` where
 the line's stamped `unit_price` differs from the `item_prices` row effective on
@@ -30,6 +36,7 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 
 from core.counter import money
+from core.fiscal import service as handoff
 from core.inventory import ledger
 from core.models import (
     Item,
@@ -285,6 +292,12 @@ def close(sale, *, closed_at=None, request_id=""):
     sale.closed_at = closed_at or timezone.now()
     sale.save(update_fields=["status", "closed_at", "updated_at"])
     restate_totals(sale)
+    # **S5's attach point, and S4 knows nothing about what happens behind it.**
+    # The service builds the canonical document and enqueues its delivery inside
+    # this same pinned transaction; with no invoicing target configured it writes
+    # nothing, enqueues nothing and answers `None`, which is the default and the
+    # state every demo runs in (§8). It never raises into this transaction.
+    handoff.hand_off_sale(sale)
     return sale
 
 
@@ -345,6 +358,12 @@ def void(sale, *, actor=None, device=None, request_id="", reason="", at=None):
     sale.voided_at = at or timezone.now()
     sale.void_reason = (reason or "")[:500]
     sale.save(update_fields=["status", "voided_at", "void_reason", "updated_at"])
+    # **A void is a credit note, always** (§8). Botica issues no fiscal
+    # correction of its own -- it hands the reversal to the client's invoicing
+    # system, which issues whatever instrument it issues, and the two go out in
+    # the order they happened. Cancelling the queued sale instead would leave
+    # the target never having seen the `sales.number` both systems reconcile on.
+    handoff.hand_off_void(sale)
     return sale
 
 

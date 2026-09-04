@@ -42,6 +42,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.counter import money, sales as sale_service
+from core.fiscal import service as handoff
 from core.inventory import ledger
 from core.models import (
     Customer,
@@ -820,13 +821,21 @@ def _write_sale_return(device, collection, row, client_uuid, options):
     if _uuid(payload.get("id")):
         sale_return.id = _uuid(payload.get("id"))
     try:
-        return _land(sale_return, SaleReturn, device, client_uuid)
+        landed = _land(sale_return, SaleReturn, device, client_uuid)
     except IntegrityError as failure:
         raise push_service.Rejected(
             f"Ya hay otra devolución con el número «{number}» en esta sede.",
             code="number_taken",
             field="number",
         ) from failure
+    if landed.outcome == push_service.APPLIED:
+        # **S5's second attach point.** The credit-note row is written here, in
+        # the header's own pinned transaction, and its payload is built when it
+        # is about to be sent -- by which time the lines that arrive after this
+        # row in the same batch have all landed. Building it here instead would
+        # produce a credit note with no lines (S5, *the sale handoff service*).
+        handoff.hand_off_return(sale_return)
+    return landed
 
 
 def _write_sale_return_line(device, collection, row, client_uuid, options):

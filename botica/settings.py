@@ -164,6 +164,14 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = (
     [BASE_DIR / "web" / "dist"] if (BASE_DIR / "web" / "dist").exists() else []
 )
+# Object storage (architecture §10). S5 writes the fiscal export files and its
+# loopback target's own store through Django's `default` storage; S10 provisions
+# the bucket and owns its lifecycle. On a developer's machine this is the
+# filesystem under `MEDIA_ROOT`; in production the deploy swaps this one entry
+# for an S3-compatible backend and no stage's code changes.
+MEDIA_URL = "/media/"
+MEDIA_ROOT = _env("BOTICA_MEDIA_ROOT", "/tmp/botica-media")
+
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
@@ -252,6 +260,13 @@ BOTICA_INVITATION_TTL_DAYS = int(_env("BOTICA_INVITATION_TTL_DAYS", "7"))
 BOTICA_INVITATION_MAX_ATTEMPTS = int(_env("BOTICA_INVITATION_MAX_ATTEMPTS", "5"))
 
 BOTICA_VERSION = _env("BOTICA_VERSION", "") or "0.1.0"
+
+# S5 · the invoicing credential, keyed per tenant slug and **never in
+# `tenants.settings`**: a credential in a JSONB column is a credential every
+# `admin` query can read and every audit row records (§9). The environment is
+# the store; this map exists so a test can populate one without mutating the
+# process environment. See `core.fiscal.secrets` for the key form.
+BOTICA_INVOICING_CREDENTIALS: dict[str, str] = {}
 
 LOGGING = {
     "version": 1,

@@ -49,3 +49,10 @@ from core.inventory import demo as inventory  # noqa: E402,F401  -- "stock"
 # stock through S3's ledger service exactly as a real sale does, which is why it
 # requires "stock" rather than merely running after it.
 from core.counter import demo as counter  # noqa: E402,F401  -- registers "counter"
+
+# S5's fixture, and it is the one that writes nothing. It declares
+# `fiscal_documents` so the guard covers it and answers every profile with an
+# empty table: **the unconfigured tenant is what the seed ships** (§8), because
+# that is what the product ships and the silence is the behaviour S5 most needs
+# demonstrable from a bare seed.
+from core.fiscal import demo as fiscal  # noqa: E402,F401  -- registers "fiscal"

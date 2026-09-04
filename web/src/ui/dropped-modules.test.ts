@@ -119,16 +119,33 @@ describe("§5 · the client sync boundary", () => {
     expect(named(offenders)).toEqual([]);
   });
 
-  it("ships no fiscal or numbering string in the bundle", () => {
+  it("ships no numbering string anywhere in the bundle", () => {
     // `blocked` ships with its geometry and **without its words** (A6, §8,
     // §B.9.1). A string naming an exhausted numbering range would be live copy
     // for a condition that cannot occur, which is how a stale string ships:
     // nothing renders it, so no review catches it, and it reads as a promise
     // the product still makes.
+    //
+    // **Numbering has no exception, at any stage.** Botica allocates no fiscal
+    // number, so there is nowhere in the product a resolution or a range could
+    // honestly be named.
     const offenders = shipped.filter((file) =>
-      /numeraci[oó]n|resoluci[oó]n dian|rango fiscal|CUDE|CUFE/i.test(
-        code(file),
-      ),
+      /numeraci[oó]n|resoluci[oó]n dian|rango fiscal/i.test(code(file)),
+    );
+    expect(named(offenders)).toEqual([]);
+  });
+
+  it("names a CUDE nowhere outside src/fiscal", () => {
+    // **Narrowed by S5, and only narrowed.** Botica generates no CUDE and signs
+    // nothing (A9) -- what changed is that a *target* may return one, and
+    // `fiscal_documents.cude` records whatever the client's own invoicing
+    // system answered (ledger, disputed columns). Showing it on that stage's
+    // own office surface is the whole of the exception: the till still carries
+    // the string nowhere, which is what this guard was written for.
+    const inFiscal = (file: string) =>
+      file.replace(SRC, "").startsWith("fiscal/");
+    const offenders = shipped.filter(
+      (file) => !inFiscal(file) && /CUDE|CUFE/i.test(code(file)),
     );
     expect(named(offenders)).toEqual([]);
   });
