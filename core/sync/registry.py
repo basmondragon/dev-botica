@@ -675,14 +675,29 @@ def _window(days):
     return timezone.now() - timedelta(days=days)
 
 
+#: **The membership predicate names `source`, and S6 is why** (rule 4's spirit:
+#: an invariant belongs to the stage whose rows make it necessary, not to the
+#: table's owner). S6's history loader writes `sales` rows at `source =
+#: imported` -- documents another system issued years ago, with no shift, no
+#: device, no payment and no `stock_moves` row behind them. A legacy export that
+#: runs right up to cutover carries last week's sales, which would fall inside
+#: the retention window below and replicate to every till in the sede: the
+#: ticket list would show sales no cashier rang, and the counter's own average
+#: would be computed over two systems.
+COUNTER_ONLY = Q(source="counter")
+
+
 def _sale_member_q(options):
     del options
-    return Q(occurred_at__gte=_window(SALE_RETENTION_DAYS)) | Q(status="open")
+    return COUNTER_ONLY & (
+        Q(occurred_at__gte=_window(SALE_RETENTION_DAYS)) | Q(status="open")
+    )
 
 
 def _child_of_sale_member_q(options):
-    return Q(sale__occurred_at__gte=_window(SALE_RETENTION_DAYS)) | Q(
-        sale__status="open"
+    del options
+    return Q(sale__source="counter") & (
+        Q(sale__occurred_at__gte=_window(SALE_RETENTION_DAYS)) | Q(sale__status="open")
     )
 
 
@@ -792,8 +807,11 @@ SALES = Collection(
     scope_q=_own_location,
     member_q=_sale_member_q,
     member=lambda record, options: (
-        record["status"] == "open"
-        or record["occurred_at"] >= _window(SALE_RETENTION_DAYS)
+        record["source"] == "counter"
+        and (
+            record["status"] == "open"
+            or record["occurred_at"] >= _window(SALE_RETENTION_DAYS)
+        )
     ),
     document=lambda record: {
         **_head(record),

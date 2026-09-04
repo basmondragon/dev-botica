@@ -1,20 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { NAV } from "@/shell/nav";
-import { StageRoute } from "@/shell/stage-route";
-
-const ITEM = NAV.find((item) => item.key === "purchasing")!;
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 /**
- * Compras · `Órdenes`. S0 ships the route and its empty state; S6 fills it.
+ * The Compras module. §B.8.5 · one nav item and three routes, switched by the
+ * breadcrumb menu: `Orden sugerida`, `Órdenes de compra` and `Recepción`. This
+ * layout holds nothing of its own, because §B.8.5 allows exactly one `t-28`
+ * title per route and each child draws its own.
  */
 export const Route = createFileRoute("/_app/purchasing")({
-  component: () => (
-    <StageRoute
-      item={ITEM}
-      breadcrumb={["Compras"]}
-      emptyTitle="Todavía no hay órdenes sugeridas"
-      title="Órdenes"
-      body="Las órdenes sugeridas aparecen cuando el modelo tenga historia de venta para aprender."
-    />
-  ),
+  component: () => <Outlet />,
 });

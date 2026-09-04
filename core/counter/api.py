@@ -40,6 +40,7 @@ from core.models import (
     SaleLine,
     SaleReturn,
     SaleReturnLine,
+    SaleSource,
     SaleStatus,
     Shift,
     ShiftStatus,
@@ -245,8 +246,13 @@ def _sale_queryset(
         rows = rows.filter(shift_id=shift_id)
     if status:
         rows = rows.filter(status=status)
-    if source:
-        rows = rows.filter(source=source)
+    # **A query over `sales` that does not name `source` is a defect** (S6,
+    # *Data*). The default is `counter`: an imported row was rung up in another
+    # system years ago, belongs to no turno and to no device, and a Ventas list
+    # that mixed the two would give an owner a period total that reconciles
+    # against nothing. Asking for `imported` explicitly is how a report that
+    # deliberately spans the legacy history says so.
+    rows = rows.filter(source=source or SaleSource.COUNTER)
     if sold_by:
         rows = rows.filter(sold_by_user_id=sold_by)
     if since:

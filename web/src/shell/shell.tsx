@@ -374,19 +374,30 @@ export function Content({
 }
 
 /** A route whose `main` is one full-height panel, at `32px 40px` with the
- *  table filling it. */
+ *  table filling it.
+ *
+ *  §B.3 · `className` exists for the one departure the inset rule allows: a
+ *  route whose `main` is a single full-height working panel takes `28px 40px`,
+ *  with the 8px going to the panel. That is not a per-screen judgement -- a
+ *  route with a grid takes 32 and a route with one panel takes 28 -- so the
+ *  caller names `PANEL_INSET` rather than a number. */
 export function TableContent({
   children,
   id = "content",
+  className,
 }: {
   children: ReactNode;
   id?: string;
+  className?: string;
 }) {
   return (
     <main
       id={id}
       tabIndex={-1}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden px-10 py-8"
+      className={cn(
+        "flex min-h-0 flex-1 flex-col overflow-hidden px-10 py-8",
+        className,
+      )}
     >
       {children}
     </main>

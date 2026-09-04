@@ -56,3 +56,10 @@ from core.counter import demo as counter  # noqa: E402,F401  -- registers "count
 # that is what the product ships and the silence is the behaviour S5 most needs
 # demonstrable from a bare seed.
 from core.fiscal import demo as fiscal  # noqa: E402,F401  -- registers "fiscal"
+
+# S6's fixture: the forecast, the suggested orders and the receipts. **It writes
+# no forecast row and no order line by hand** -- it runs `forecast.refresh` and
+# `purchase_order.generate` exactly as the cron does and then walks the orders
+# they produced through the product's own service functions, because a regime
+# that appears only because a fixture set `basis` is a regime nobody has tested.
+from core.purchasing import demo as purchasing  # noqa: E402,F401  -- "purchasing"

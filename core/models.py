@@ -2268,6 +2268,16 @@ class Sale(ClientWrittenModel):
                 condition=models.Q(status="closed", source="counter"),
                 name="sales_closed_for_handoff",
             ),
+            # Rule 4 · **migrated onto this table by S6.** The forecast job's
+            # 26-week window scan, which buckets demand by `occurred_at` -- the
+            # clock the sale happened on, not the clock the server recorded it
+            # on. Distinct from `sales_location_period` above, which is on
+            # `recorded_at` and is what every rollup reads; a window over one
+            # clock cannot be served by an index on the other.
+            models.Index(
+                fields=["tenant", "location", "occurred_at"],
+                name="sales_forecast_window",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -2283,6 +2293,18 @@ class Sale(ClientWrittenModel):
                 condition=~models.Q(source=SaleSource.COUNTER)
                 | models.Q(shift__isnull=False),
                 name="a_counter_sale_sits_in_a_shift",
+            ),
+            # **Migrated onto this table by S6** (rule 4, which covers a check
+            # constraint as well as an index: a constraint belongs to the stage
+            # whose invariant needs it, not to the table's creator). S6 is the
+            # only writer of `imported`, and this is what makes the quarantine
+            # construction rather than discipline -- an imported sale carrying a
+            # shift or a device is refused by the database, so it can never
+            # reach a cash reconciliation, a turno or a fiscal document.
+            models.CheckConstraint(
+                condition=~models.Q(source=SaleSource.IMPORTED)
+                | models.Q(shift__isnull=True, device__isnull=True),
+                name="an_imported_sale_has_no_shift_and_no_device",
             ),
             models.CheckConstraint(
                 condition=models.Q(status__in=SaleStatus.values),
@@ -2369,6 +2391,16 @@ class SaleLine(ClientWrittenModel):
                 name="sale_lines_delta_cursor",
             ),
             models.Index(fields=["tenant", "sale"], name="sale_lines_by_sale"),
+            # Rule 4 · **migrated onto this table by S6 as the item-grain
+            # superset S7 inherits.** S6's per-item weekly aggregation and S7's
+            # elasticity estimation both want an item-first index here, and the
+            # lower-numbered stage creates it: a near-duplicate index on the
+            # same table costs a second write on every sale line, forever, to
+            # save one lookup. `sale_id` is the trailing column because the
+            # co-occurrence query behind `cross_sell_pair` self-joins on it.
+            models.Index(
+                fields=["tenant", "item", "sale"], name="sale_lines_item_grain"
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -2724,3 +2756,487 @@ class FiscalDocument(TenantScopedModel):
 
     def __str__(self):
         return self.document_key
+
+
+# ---------------------------------------------------------------------------
+# S6 · purchasing. Five tables and three enums (ledger, architecture §3, §1).
+#
+# **The order is a decision somebody makes, and the model's proposal survives
+# it.** `suggested_quantity` and `approved_quantity` are two columns on every
+# model-sourced line and never one: the difference between what the forecast
+# proposed and what the buyer approved is the only honest measure the product
+# will ever have of whether the model is trusted, and overwriting the proposal
+# destroys that measurement permanently (§3, ledger, disputed columns).
+#
+# **Nothing here writes a quantity.** Receiving calls S3's ledger service, which
+# is the one code path that may append a `stock_moves` row and move the
+# projection (rule 7, A3). This stage's tables record documents; the shelf is
+# still the sum of the ledger.
+#
+# The tables carry the same S0 convention as the twenty-nine above; their
+# policies live in migration 0016. They carry **no client-write quartet**: every
+# surface in this stage is an office surface, no purchasing table reaches a
+# device, and rule 9's sync registry is not amended (§4, A4).
+# ---------------------------------------------------------------------------
+
+
+class PurchaseOrderStatus(models.TextChoices):
+    """The ledger's six, declared complete at creation (enum register).
+
+    `discarded` is terminal and is **not a failure**: discarding a suggestion is
+    the product working, and design-system §B.7.4 colours it neutral for exactly
+    that reason.
+    """
+
+    SUGGESTED = "suggested", "Sugerida"
+    APPROVED = "approved", "Aprobada"
+    SENT = "sent", "Enviada al proveedor"
+    PARTIALLY_RECEIVED = "partially_received", "Recibida parcial"
+    RECEIVED = "received", "Recibida"
+    DISCARDED = "discarded", "Descartada"
+
+
+class PurchaseOrderSource(models.TextChoices):
+    """Checked text, not a Postgres enum: the ledger names three enums for S6
+    and this is not one of them. Two values and there is no third -- an order is
+    proposed by the forecast or typed by a person."""
+
+    MODEL = "model", "Propuesta por el modelo"
+    MANUAL = "manual", "Escrita a mano"
+
+
+class GoodsReceiptType(models.TextChoices):
+    """**Coined here** (*Data*). The ledger assigns `supplier_return` moves to
+    S6 and assigns S6 no returns table, so a return is a receipt with the sign
+    reversed: the same document, the same lots, the same ledger call, and the
+    header reads `Devolución al proveedor`."""
+
+    RECEIPT = "receipt", "Recepción"
+    SUPPLIER_RETURN = "supplier_return", "Devolución al proveedor"
+
+
+class GoodsReceiptStatus(models.TextChoices):
+    """**Coined here.** A receipt is typed line by line and confirmed once, and
+    confirmation must be one atomic act that calls the ledger a single time --
+    so the typing has a state of its own."""
+
+    DRAFT = "draft", "En captura"
+    CONFIRMED = "confirmed", "Confirmada"
+
+
+class ForecastBasis(models.TextChoices):
+    """**Coined here** -- §1's three regimes, decided per item and per sede and
+    never per tenant.
+
+    `parametric` is not a forecast and does not pretend to be one: it is the
+    sede's own replenishment policy, arithmetic over `stock_policies`, which a
+    pharmacist set deliberately. `learning` is a real estimate that has not
+    earned promotion and is floored by the parametric quantity. `learned` is an
+    estimate worth the name.
+    """
+
+    PARAMETRIC = "parametric", "Sin histórico"
+    LEARNING = "learning", "Aprendiendo"
+    LEARNED = "learned", "Aprendida"
+
+
+#: The deterministic cause behind every line, and the string the `Por qué` cell
+#: renders when the model wrote no prose. **A constrained text column rather
+#: than a Postgres enum**, the choice `stock_moves.reason` already made and for
+#: the same reason: a later stage adds a code without a type migration, and the
+#: cost is a CHECK instead of a `CREATE TYPE`.
+#:
+#: `no_history` is deliberately absent. Under §1 an item the model has no basis
+#: for is not on the order at all, so there is no line to carry it, and the two
+#: `parametric_*` codes describe a suggestion that exists rather than one that
+#: could not be made.
+PURCHASE_REASON_CODES = (
+    "seasonal_peak_recent_stockout",
+    "stable_rotation",
+    "stockout_available_elsewhere",
+    "seasonal_peak",
+    "predictable_chronic",
+    "sufficient_coverage",
+    "lot_expiring",
+    "overstock",
+    "cross_sell_pair",
+    "learning_floor",
+    "parametric_policy",
+    "parametric_category_default",
+    "measured_demand",
+)
+
+
+class PurchaseOrder(TenantScopedModel):
+    """One order, for one supplier, at one sede.
+
+    **`number` is coined and is an internal document number.** The drawn title
+    is `Orden sugerida 248` and a per-location consecutive is what produces it.
+    It is unrelated to `sales.number`, which is the key the client's invoicing
+    system reconciles against (§8), and unrelated to fiscal numbering, which
+    Botica does not do at v1 (A6).
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    supplier = models.ForeignKey(
+        Supplier, on_delete=models.PROTECT, related_name="purchase_orders"
+    )
+    number = models.PositiveIntegerField()
+    status = EnumField(
+        max_length=24,
+        choices=PurchaseOrderStatus,
+        db_enum="purchase_order_status",
+        default=PurchaseOrderStatus.SUGGESTED,
+    )
+    source = models.CharField(
+        max_length=16, choices=PurchaseOrderSource, default=PurchaseOrderSource.MODEL
+    )
+    #: Which run of which forecast produced it. Null on a manual order, which no
+    #: model proposed.
+    model_version = models.CharField(max_length=64, blank=True)
+    #: Σ `approved_quantity × unit_cost`, maintained on every write that can
+    #: move it. Stored rather than summed on read because it is the footer of a
+    #: server-paginated table: a total computed on the page would be the page's
+    #: total, which is the wrong number rendered confidently.
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    approved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: S0's referential rule: stamp the readable identity at write time, so an
+    #: order approved by somebody later removed from the roster still says who
+    #: approved it.
+    approved_by_name = models.CharField(max_length=200, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    discarded_at = models.DateTimeField(null=True, blank=True)
+
+    #: Coined, and it is `invitations.last_delivery_error`'s argument one stage
+    #: on: §B.10.3 requires the dispatch failure to name the reason and the
+    #: retry count beside `[Reintentar ahora]` and `[Marcar como enviada]`, and
+    #: a screen cannot name what nothing stored.
+    dispatch_attempts = models.PositiveSmallIntegerField(default=0)
+    last_dispatch_error = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "purchase_orders"
+        ordering = ["-created_at"]
+        indexes = [
+            # Rule 4 · the orders grid and the `Compras` nav counter, which is a
+            # count of orders at `suggested` per readable sede.
+            models.Index(
+                fields=["tenant", "location", "status", "created_at"],
+                name="purchase_orders_grid",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "location", "number"],
+                name="one_purchase_order_number_per_location",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source__in=PurchaseOrderSource.values),
+                name="purchase_order_source_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Orden {self.number}"
+
+
+class PurchaseOrderLine(TenantScopedModel):
+    """One reference on one order.
+
+    **`suggested_quantity` is written once, at generation, and never again.**
+    No endpoint, job or migration in this stage may move it: `PATCH
+    /api/purchase-orders/{id}/lines/{line_id}` writes `approved_quantity` and
+    the two columns exist so the deviation between them can be read six months
+    later (§3, ledger).
+
+    It is **null**, not zero, on a manual line: nobody proposed anything, and a
+    zero there would enter the deviation measurement as a proposal of nothing.
+    """
+
+    purchase_order = models.ForeignKey(
+        PurchaseOrder, on_delete=models.CASCADE, related_name="lines"
+    )
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    #: Base units, always -- `items.unit` is the base unit and every quantity
+    #: downstream of S1 is in it. `supplier_items.min_order_pack` rounds the
+    #: figure up; it does not change what the figure counts.
+    suggested_quantity = models.IntegerField(null=True, blank=True)
+    approved_quantity = models.IntegerField(default=0)
+    received_quantity = models.IntegerField(default=0)
+    #: Per base unit, from `supplier_items.cost` divided by `units_per_pack` at
+    #: generation. Null where the supplier link carries no cost, never zero.
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    #: The model's prose, on `learned` lines only, or empty. A `parametric` or
+    #: `learning` line renders its `reason_code`'s fixed string, because on
+    #: those lines the exact wording *is* the honest part (§10).
+    reason = models.TextField(blank=True)
+    #: Coined: the deterministic cause the prose is written from, so `Por qué`
+    #: is never empty when the gateway is down.
+    reason_code = models.CharField(max_length=48, blank=True)
+    #: Coined: the regime the line was generated under, stamped here because
+    #: `demand_forecasts` keeps no history and a line has to stay readable a
+    #: month after the forecast moved on. Null on a manual line.
+    basis = EnumField(
+        max_length=16,
+        choices=ForecastBasis,
+        db_enum="forecast_basis",
+        null=True,
+        blank=True,
+    )
+    #: 0–1, stamped from the forecast at generation. Null on a manual line.
+    confidence = models.DecimalField(
+        max_digits=4, decimal_places=3, null=True, blank=True
+    )
+    #: Days of cover at generation. **Null is not zero** (§B.9.2 tier 3): a
+    #: `parametric` line has no demand estimate to divide by and the cell reads
+    #: `—` with `sin histórico`.
+    coverage_days = models.DecimalField(
+        max_digits=8, decimal_places=1, null=True, blank=True
+    )
+
+    class Meta:
+        db_table = "purchase_order_lines"
+        ordering = ["item__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "purchase_order", "item"],
+                name="one_line_per_item_per_purchase_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reason_code="")
+                | models.Q(reason_code__in=PURCHASE_REASON_CODES),
+                name="purchase_reason_code_is_declared",
+            ),
+            # **The model never writes prose it has no basis for** (§1, §10).
+            # Only a `learned` line is sent to the gateway, and the database is
+            # what makes that structural rather than editorial: a `parametric`
+            # line carrying an invented finding is the one thing this stage must
+            # never ship.
+            models.CheckConstraint(
+                condition=models.Q(reason="") | models.Q(basis=ForecastBasis.LEARNED),
+                name="only_a_learned_line_carries_model_prose",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(approved_quantity__gte=0),
+                name="an_approved_quantity_is_not_negative",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} × {self.approved_quantity}"
+
+
+class GoodsReceipt(TenantScopedModel):
+    """Merchandise arriving against an order, or going back to the supplier.
+
+    `purchase_order` is **nullable** because a supplier return may have no order
+    behind it. `status` exists because a receipt is typed line by line and
+    confirmation must be one atomic act that calls S3's ledger service once
+    (rule 7): a document that moved stock as it was typed could not be corrected
+    before it was confirmed, and half of it would be on the shelf.
+    """
+
+    purchase_order = models.ForeignKey(
+        PurchaseOrder,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="receipts",
+    )
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    supplier = models.ForeignKey(
+        Supplier, on_delete=models.PROTECT, related_name="goods_receipts"
+    )
+    type = EnumField(
+        max_length=24,
+        choices=GoodsReceiptType,
+        db_enum="goods_receipt_type",
+        default=GoodsReceiptType.RECEIPT,
+    )
+    status = models.CharField(
+        max_length=16, choices=GoodsReceiptStatus, default=GoodsReceiptStatus.DRAFT
+    )
+    #: When the boxes arrived, which is what `supplier.lead_time_days` is
+    #: measured against -- not when somebody got round to typing them.
+    received_at = models.DateTimeField(default=timezone.now)
+    received_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    received_by_name = models.CharField(max_length=200, blank=True)
+    #: Coined: the remito or invoice number printed on the supplier's own
+    #: paperwork, which is what a person matches a delivery against.
+    supplier_document_number = models.CharField(max_length=64, blank=True)
+    notes = models.TextField(blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "goods_receipts"
+        ordering = ["-received_at"]
+        indexes = [
+            # Rule 4 · `GET /api/goods-receipts`, filtered by sede and period.
+            models.Index(
+                fields=["tenant", "location", "received_at"],
+                name="goods_receipts_by_location",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=GoodsReceiptStatus.values),
+                name="goods_receipt_status_is_declared",
+            ),
+            # A receipt against an order is a receipt; a return may stand alone.
+            # An order behind a *return* would be a document claiming the
+            # supplier shipped what is going back to them.
+            models.CheckConstraint(
+                condition=models.Q(type=GoodsReceiptType.RECEIPT)
+                | models.Q(purchase_order__isnull=True),
+                name="a_supplier_return_has_no_order_behind_it",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.type} · {self.received_at:%Y-%m-%d}"
+
+
+class GoodsReceiptLine(TenantScopedModel):
+    """One reference on one receipt.
+
+    `lot_code` and `expires_at` are kept **as typed** beside `lot_id`, which is
+    the row they resolved to. A typo that attached units to the wrong lot is
+    then visible after the fact instead of having been silently merged into it.
+    """
+
+    goods_receipt = models.ForeignKey(
+        GoodsReceipt, on_delete=models.CASCADE, related_name="lines"
+    )
+    #: Null on a line for something the order did not carry -- an
+    #: over-delivery of a reference the supplier substituted, or a standalone
+    #: return.
+    purchase_order_line = models.ForeignKey(
+        PurchaseOrderLine,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="receipt_lines",
+    )
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    lot = models.ForeignKey(
+        Lot, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+    lot_code = models.CharField(max_length=64, blank=True)
+    expires_at = models.DateField(null=True, blank=True)
+    #: Base units, positive on both types. A return's sign belongs to the move
+    #: the ledger writes, not to what a person typed into the screen.
+    quantity = models.IntegerField()
+    unit_cost = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+
+    class Meta:
+        db_table = "goods_receipt_lines"
+        ordering = ["item__name"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="a_receipt_line_moves_something",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} × {self.quantity}"
+
+
+class DemandForecast(TenantScopedModel):
+    """One current row per item per sede. **There is no history here.**
+
+    What the model said on a given day survives on `purchase_order_lines`,
+    stamped at generation; this table is what the next generation reads.
+
+    **`weekly_sales`, `trend` and `coverage_days` are null in the `parametric`
+    regime, and a null is not a zero** (§B.9.2 tier 3). Two consumers read these
+    rows and both must handle it: S3's Existencias derives its `Sobrestock`
+    state from cover and simply does not fire it where there is none, and S9's
+    tiles must not average a `parametric` row into a figure about forecast
+    accuracy -- it is not forecasting, and `basis` says so.
+    """
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="forecasts")
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+
+    #: Units per week, exponentially weighted over the trailing 26 weeks.
+    weekly_sales = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True
+    )
+    #: The last four weeks over the prior eight, minus one, clipped to ±1. It
+    #: drives reason codes and nothing else; it does not scale a quantity.
+    trend = models.DecimalField(max_digits=5, decimal_places=3, null=True, blank=True)
+    coverage_days = models.DecimalField(
+        max_digits=8, decimal_places=1, null=True, blank=True
+    )
+    reorder_point = models.IntegerField(default=0)
+    safety_stock = models.IntegerField(default=0)
+    computed_at = models.DateTimeField(default=timezone.now)
+    model_version = models.CharField(max_length=64)
+
+    #: Coined on this stage's own table (rule 1): which of §1's three regimes
+    #: produced the row, and how much the model actually knows.
+    basis = EnumField(max_length=16, choices=ForecastBasis, db_enum="forecast_basis")
+    confidence = models.DecimalField(max_digits=4, decimal_places=3, default=0)
+
+    #: Coined: the three inputs `confidence` is computed from, kept because the
+    #: record panel states them under the band -- a confidence nobody can take
+    #: apart is a number an administrator learns to ignore. Null in the
+    #: `parametric` regime, where there is nothing to have measured.
+    usable_weeks = models.PositiveSmallIntegerField(null=True, blank=True)
+    variation = models.DecimalField(
+        max_digits=6, decimal_places=3, null=True, blank=True
+    )
+    #: The share of the window that is `imported` rather than Botica's own.
+    #: An imported week cannot be censored for stockouts -- there are no
+    #: `stock_moves` behind it -- so a majority-imported window drops a band.
+    imported_share = models.DecimalField(
+        max_digits=4, decimal_places=3, null=True, blank=True
+    )
+
+    class Meta:
+        db_table = "demand_forecasts"
+        ordering = ["item__name"]
+        indexes = [
+            # Rule 4 · `GET /api/demand-forecasts` and the generation job, both
+            # of which read one sede's whole forecast. The unique constraint
+            # below is item-first and cannot serve a location-first scan.
+            models.Index(
+                fields=["tenant", "location", "item"],
+                name="demand_forecasts_by_location",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "item", "location"],
+                name="one_forecast_per_item_and_location",
+            ),
+            # §1 · **a parametric row states that it has no demand estimate**
+            # rather than storing a zero, and the database is what keeps it
+            # true through a backfill nobody reviewed.
+            models.CheckConstraint(
+                condition=~models.Q(basis=ForecastBasis.PARAMETRIC)
+                | models.Q(
+                    weekly_sales__isnull=True,
+                    trend__isnull=True,
+                    coverage_days__isnull=True,
+                ),
+                name="a_parametric_forecast_states_no_demand",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence__gte=0) & models.Q(confidence__lte=1),
+                name="confidence_is_a_share",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} @ {self.location_id} · {self.basis}"

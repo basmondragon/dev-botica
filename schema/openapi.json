@@ -48,7 +48,7 @@
             }
           }
         },
-        "description": "§B.8.2 · the nav's counters. S6 fills `purchasing`; a stage adds its key\nhere rather than fetching its own count.\n\n**`counter` is ventas abiertas, and only for an office identity.** A\n`cashier` reads the same number from their own local store at zero latency\nand never asks the server for it -- the till is the read model that knows,\nand a nav counter that needed the network would be the one number on a till\nsurface that stops working when the cable comes out (§4, A4).",
+        "description": "§B.8.2 · the nav's counters. A stage adds its key here rather than\nfetching its own count.\n\n**`counter` is ventas abiertas, and only for an office identity.** A\n`cashier` reads the same number from their own local store at zero latency\nand never asks the server for it -- the till is the read model that knows,\nand a nav counter that needed the network would be the one number on a till\nsurface that stops working when the cable comes out (§4, A4).",
         "security": [
           {
             "RoleAuth": []
@@ -5358,6 +5358,1041 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/InvoicingSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders": {
+      "get": {
+        "operationId": "core_purchasing_api_list_purchase_orders",
+        "summary": "List Purchase Orders",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "suggested",
+                      "approved",
+                      "sent",
+                      "partially_received",
+                      "received",
+                      "discarded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "supplier_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Supplier Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "manual",
+                    "model"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_OrderRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "`Órdenes de compra`, server-paginated per the grid contract (§9).",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_purchasing_api_create_purchase_order",
+        "summary": "Create Purchase Order",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRow"
+                }
+              }
+            }
+          }
+        },
+        "description": "A manual order: a supplier, a sede and typed lines.\n\n**`suggested_quantity` is null on every line, not zero.** Nobody proposed\nanything, and a zero there would enter the deviation measurement as a\nproposal of nothing -- which is the one number this stage exists to keep\nhonest.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualOrderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders/generate": {
+      "post": {
+        "operationId": "core_purchasing_api_generate_purchase_orders",
+        "summary": "Generate Purchase Orders",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run generation now, for one sede or for every readable one.\n\n**Returns the job handle, not the orders**: generation reads a sede's whole\nforecast and a request that waited for twenty of them would time out on the\none screen that has a button for it.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders/{order_id}": {
+      "get": {
+        "operationId": "core_purchasing_api_read_purchase_order",
+        "summary": "Read Purchase Order",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "parametric",
+                      "learning",
+                      "learned"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "band",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "alta",
+                      "media",
+                      "baja"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Band"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One order with its lines, its four tiles, its total and its provenance.\n\n**The tiles are computed in this request** (acceptance 2). A second round\ntrip for four numbers is a second round trip on the screen an administrator\nopens first thing on a Monday, and it is what makes the 400 ms budget a\nbudget for the page rather than for one of its halves.\n\n**The tiles describe the whole order and the footer describes the filter.**\nNarrowing to `Paramétrica` narrows the rows; it does not narrow what the\norder is worth.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders/{order_id}/lines/{line_id}": {
+      "patch": {
+        "operationId": "core_purchasing_api_patch_line",
+        "summary": "Patch Line",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "line_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Line Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineRow"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write `approved_quantity`. **Never writes `suggested_quantity`.**\n\nRefused on any order past `suggested`: an approved order's quantities are\nwhat the supplier was sent, and a screen that let them drift from it would\nbe a screen that disagrees with the carton on the loading bay.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinePatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders/{order_id}/approve": {
+      "post": {
+        "operationId": "core_purchasing_api_approve_purchase_order",
+        "summary": "Approve Purchase Order",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRow"
+                }
+              }
+            }
+          }
+        },
+        "description": "Freeze the quantities, stamp the approver, enqueue the dispatch.\n\n**Idempotent**: a second call on an order past `suggested` returns it\nunchanged and enqueues nothing, because a double-pressed button must not\nsend a supplier the same order twice.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders/{order_id}/discard": {
+      "post": {
+        "operationId": "core_purchasing_api_discard_purchase_order",
+        "summary": "Discard Purchase Order",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRow"
+                }
+              }
+            }
+          }
+        },
+        "description": "Terminal, and **not a failure**: the badge is neutral (§B.7.4).",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/purchase-orders/{order_id}/mark-sent": {
+      "post": {
+        "operationId": "core_purchasing_api_mark_purchase_order_sent",
+        "summary": "Mark Purchase Order Sent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderRow"
+                }
+              }
+            }
+          }
+        },
+        "description": "Record a dispatch Botica did not make.\n\nThe supplier has no address on file, or the buyer phoned it in. Either is\nordinary, and an order stuck at **Aprobada** because we could not send it is\nan order nobody can receive against.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/goods-receipts": {
+      "get": {
+        "operationId": "core_purchasing_api_list_goods_receipts",
+        "summary": "List Goods Receipts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "purchase_order_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Purchase Order Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "supplier_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Supplier Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "receipt",
+                    "supplier_return"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "confirmed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_GoodsReceiptRow_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_purchasing_api_create_goods_receipt",
+        "summary": "Create Goods Receipt",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoodsReceiptDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Open a `draft` receipt against an order, or a standalone supplier return.\n\nNothing else. A receipt with neither an order nor a return behind it would\nbe merchandise arriving from nowhere, and S3's `Cargar mercancía` is the\nscreen that records that with the reason it requires.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoodsReceiptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/goods-receipts/{receipt_id}": {
+      "get": {
+        "operationId": "core_purchasing_api_read_goods_receipt",
+        "summary": "Read Goods Receipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receipt_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Receipt Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoodsReceiptDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_purchasing_api_patch_goods_receipt",
+        "summary": "Patch Goods Receipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receipt_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Receipt Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoodsReceiptDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Edit a draft's lines -- quantities, lot codes, expiries, unit costs.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoodsReceiptPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/goods-receipts/{receipt_id}/confirm": {
+      "post": {
+        "operationId": "core_purchasing_api_confirm_goods_receipt",
+        "summary": "Confirm Goods Receipt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "receipt_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Receipt Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoodsReceiptDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "The atomic act: lots, one ledger call per line, cost, lead time, status.\n\n**Idempotent on the receipt** -- a retried confirmation moves no stock twice,\nand the guarantee is doubled: the status check returns early on the ordinary\ndouble click, and every move's `client_uuid` is derived from\n`(receipt, line)` so two requests that raced past it collide in the ledger's\nown unique index.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/demand-forecasts": {
+      "get": {
+        "operationId": "core_purchasing_api_list_demand_forecasts",
+        "summary": "List Demand Forecasts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Location Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "parametric",
+                      "learning",
+                      "learned"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ForecastRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The current forecast for one sede.\n\n**One row per item per sede and no history**: what the model said on a given\nday survives on `purchase_order_lines`, stamped at generation.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/purchasing": {
+      "get": {
+        "operationId": "core_purchasing_api_read_purchasing_settings",
+        "summary": "Read Purchasing Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasingSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_purchasing_api_write_purchasing_settings",
+        "summary": "Write Purchasing Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchasingSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One `jsonb_set`, every other group untouched (rule 5).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchasingSettingsIn"
               }
             }
           },
@@ -14065,6 +15100,1661 @@
           }
         },
         "title": "InvoicingSettingsIn",
+        "type": "object"
+      },
+      "OrderRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "supplier_id": {
+            "format": "uuid",
+            "title": "Supplier Id",
+            "type": "string"
+          },
+          "supplier_name": {
+            "title": "Supplier Name",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "suggested",
+              "approved",
+              "sent",
+              "partially_received",
+              "received",
+              "discarded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "model",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "approved_by_name": {
+            "title": "Approved By Name",
+            "type": "string"
+          },
+          "dispatch_attempts": {
+            "title": "Dispatch Attempts",
+            "type": "integer"
+          },
+          "last_dispatch_error": {
+            "title": "Last Dispatch Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "supplier_id",
+          "supplier_name",
+          "location_id",
+          "location_name",
+          "status",
+          "source",
+          "line_count",
+          "total",
+          "created_at",
+          "approved_at",
+          "sent_at",
+          "approved_by_name",
+          "dispatch_attempts",
+          "last_dispatch_error"
+        ],
+        "title": "OrderRow",
+        "type": "object"
+      },
+      "Page_OrderRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/OrderRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[OrderRow]",
+        "type": "object"
+      },
+      "ManualLineIn": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          }
+        },
+        "required": [
+          "item_id",
+          "quantity"
+        ],
+        "title": "ManualLineIn",
+        "type": "object"
+      },
+      "ManualOrderIn": {
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "supplier_id": {
+            "format": "uuid",
+            "title": "Supplier Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ManualLineIn"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "location_id",
+          "supplier_id",
+          "lines"
+        ],
+        "title": "ManualOrderIn",
+        "type": "object"
+      },
+      "GenerateOut": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "location_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Location Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "queued",
+          "location_ids"
+        ],
+        "title": "GenerateOut",
+        "type": "object"
+      },
+      "GenerateIn": {
+        "description": "A location, or every readable one. Generation is asynchronous and this\nreturns the handle, not the orders.",
+        "properties": {
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          }
+        },
+        "title": "GenerateIn",
+        "type": "object"
+      },
+      "KpiOut": {
+        "description": "§B.9.2 tier 3 · **a figure that cannot be computed is absent, not zero.**\n\n`figure` is null and `reading` carries the reason, which is what the tile\nrenders as an em dash with `sin proyección de venta` beneath it. Three of\nthe four tiles rest on a demand estimate, and on a parametric order there is\nnone -- three tiles reading `0` would be the empty state nobody designed.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "figure": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
+          "reading": {
+            "title": "Reading",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "figure",
+          "reading"
+        ],
+        "title": "KpiOut",
+        "type": "object"
+      },
+      "LineRow": {
+        "description": "One row of the drawn table.\n\n`stock`, `weekly_sales` and `coverage_days` are **live** -- read now, from\nthe projection and the current forecast, because they are what the buyer is\ndeciding against this morning. The four stamped figures are on the record\npanel under `Al generar la orden`, which is where a reading a month old\nbelongs.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "stock": {
+            "title": "Stock",
+            "type": "integer"
+          },
+          "weekly_sales": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Sales"
+          },
+          "coverage_days": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Days"
+          },
+          "suggested_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Quantity"
+          },
+          "approved_quantity": {
+            "title": "Approved Quantity",
+            "type": "integer"
+          },
+          "received_quantity": {
+            "title": "Received Quantity",
+            "type": "integer"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "parametric",
+                  "learning",
+                  "learned"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "band": {
+            "anyOf": [
+              {
+                "enum": [
+                  "alta",
+                  "media",
+                  "baja"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "reason_fallback": {
+            "title": "Reason Fallback",
+            "type": "string"
+          },
+          "stamped_coverage_days": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stamped Coverage Days"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "presentation",
+          "manufacturer_name",
+          "category_id",
+          "stock",
+          "weekly_sales",
+          "coverage_days",
+          "suggested_quantity",
+          "approved_quantity",
+          "received_quantity",
+          "unit_cost",
+          "basis",
+          "confidence",
+          "band",
+          "reason",
+          "reason_code",
+          "reason_fallback",
+          "stamped_coverage_days"
+        ],
+        "title": "LineRow",
+        "type": "object"
+      },
+      "OrderDetail": {
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/OrderRow"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LineRow"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "suggested_reference_count": {
+            "title": "Suggested Reference Count",
+            "type": "integer"
+          },
+          "active_reference_count": {
+            "title": "Active Reference Count",
+            "type": "integer"
+          },
+          "kpis": {
+            "items": {
+              "$ref": "#/components/schemas/KpiOut"
+            },
+            "title": "Kpis",
+            "type": "array"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ProvenanceOut"
+          },
+          "basis_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Basis Counts",
+            "type": "object"
+          },
+          "band_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Band Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "order",
+          "lines",
+          "row_count",
+          "page",
+          "page_size",
+          "suggested_reference_count",
+          "active_reference_count",
+          "kpis",
+          "provenance",
+          "basis_counts",
+          "band_counts"
+        ],
+        "title": "OrderDetail",
+        "type": "object"
+      },
+      "ProvenanceOut": {
+        "description": "The filter bar's right slot, computed and never transcribed (*UI*).\n\n`basis` is the regime the majority of the order's lines were generated in,\nand `window` is the span of `sales` the refresh actually read for that sede\n-- `6 meses` on a tenant carrying six months, whatever a drawing says.",
+        "properties": {
+          "basis": {
+            "enum": [
+              "parametric",
+              "learning",
+              "learned"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "window": {
+            "title": "Window",
+            "type": "string"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "model_prose": {
+            "title": "Model Prose",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "basis",
+          "window",
+          "computed_at",
+          "model_prose"
+        ],
+        "title": "ProvenanceOut",
+        "type": "object"
+      },
+      "LinePatchIn": {
+        "description": "`approved_quantity` and nothing else. There is no field here that could\ncarry a `suggested_quantity`, which is the cheapest possible guarantee that\nno request ever moves one.",
+        "properties": {
+          "approved_quantity": {
+            "title": "Approved Quantity",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approved_quantity"
+        ],
+        "title": "LinePatchIn",
+        "type": "object"
+      },
+      "GoodsReceiptRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purchase_order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Order Id"
+          },
+          "order_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Number"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "supplier_id": {
+            "format": "uuid",
+            "title": "Supplier Id",
+            "type": "string"
+          },
+          "supplier_name": {
+            "title": "Supplier Name",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "receipt",
+              "supplier_return"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "received_by_name": {
+            "title": "Received By Name",
+            "type": "string"
+          },
+          "supplier_document_number": {
+            "title": "Supplier Document Number",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "purchase_order_id",
+          "order_number",
+          "location_id",
+          "location_name",
+          "supplier_id",
+          "supplier_name",
+          "type",
+          "status",
+          "received_at",
+          "received_by_name",
+          "supplier_document_number",
+          "notes",
+          "confirmed_at",
+          "line_count"
+        ],
+        "title": "GoodsReceiptRow",
+        "type": "object"
+      },
+      "Page_GoodsReceiptRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/GoodsReceiptRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[GoodsReceiptRow]",
+        "type": "object"
+      },
+      "GoodsReceiptDetail": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purchase_order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Order Id"
+          },
+          "order_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Number"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "supplier_id": {
+            "format": "uuid",
+            "title": "Supplier Id",
+            "type": "string"
+          },
+          "supplier_name": {
+            "title": "Supplier Name",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "receipt",
+              "supplier_return"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "received_by_name": {
+            "title": "Received By Name",
+            "type": "string"
+          },
+          "supplier_document_number": {
+            "title": "Supplier Document Number",
+            "type": "string"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "string"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/GoodsReceiptLineRow"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "purchase_order_id",
+          "order_number",
+          "location_id",
+          "location_name",
+          "supplier_id",
+          "supplier_name",
+          "type",
+          "status",
+          "received_at",
+          "received_by_name",
+          "supplier_document_number",
+          "notes",
+          "confirmed_at",
+          "line_count",
+          "lines"
+        ],
+        "title": "GoodsReceiptDetail",
+        "type": "object"
+      },
+      "GoodsReceiptLineRow": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purchase_order_line_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Order Line Id"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "tracks_lots": {
+            "title": "Tracks Lots",
+            "type": "boolean"
+          },
+          "tracks_expiry": {
+            "title": "Tracks Expiry",
+            "type": "boolean"
+          },
+          "ordered_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordered Quantity"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "lot_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Id"
+          },
+          "lot_code": {
+            "title": "Lot Code",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          }
+        },
+        "required": [
+          "id",
+          "purchase_order_line_id",
+          "item_id",
+          "item_name",
+          "presentation",
+          "tracks_lots",
+          "tracks_expiry",
+          "ordered_quantity",
+          "quantity",
+          "lot_id",
+          "lot_code",
+          "expires_at",
+          "unit_cost"
+        ],
+        "title": "GoodsReceiptLineRow",
+        "type": "object"
+      },
+      "GoodsReceiptIn": {
+        "properties": {
+          "purchase_order_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Order Id"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "supplier_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Id"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "receipt",
+                  "supplier_return"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
+          "supplier_document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Document Number"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GoodsReceiptLineIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          }
+        },
+        "title": "GoodsReceiptIn",
+        "type": "object"
+      },
+      "GoodsReceiptLineIn": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "purchase_order_line_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Order Line Id"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "lot_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Code"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "unit_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Cost"
+          }
+        },
+        "required": [
+          "quantity"
+        ],
+        "title": "GoodsReceiptLineIn",
+        "type": "object"
+      },
+      "GoodsReceiptPatchIn": {
+        "properties": {
+          "received_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At"
+          },
+          "supplier_document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supplier Document Number"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/GoodsReceiptLineIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines"
+          }
+        },
+        "title": "GoodsReceiptPatchIn",
+        "type": "object"
+      },
+      "ForecastRow": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "basis": {
+            "enum": [
+              "parametric",
+              "learning",
+              "learned"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "confidence": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "band": {
+            "enum": [
+              "alta",
+              "media",
+              "baja"
+            ],
+            "title": "Band",
+            "type": "string"
+          },
+          "weekly_sales": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Sales"
+          },
+          "trend": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend"
+          },
+          "coverage_days": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Days"
+          },
+          "reorder_point": {
+            "title": "Reorder Point",
+            "type": "integer"
+          },
+          "safety_stock": {
+            "title": "Safety Stock",
+            "type": "integer"
+          },
+          "usable_weeks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usable Weeks"
+          },
+          "variation": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variation"
+          },
+          "imported_share": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Share"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "item_name",
+          "location_id",
+          "basis",
+          "confidence",
+          "band",
+          "weekly_sales",
+          "trend",
+          "coverage_days",
+          "reorder_point",
+          "safety_stock",
+          "usable_weeks",
+          "variation",
+          "imported_share",
+          "computed_at",
+          "model_version"
+        ],
+        "title": "ForecastRow",
+        "type": "object"
+      },
+      "Page_ForecastRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ForecastRow]",
+        "type": "object"
+      },
+      "PurchasingSettingsOut": {
+        "properties": {
+          "default_lead_time_days": {
+            "title": "Default Lead Time Days",
+            "type": "integer"
+          },
+          "target_coverage_days": {
+            "title": "Target Coverage Days",
+            "type": "integer"
+          },
+          "order_cap_value": {
+            "title": "Order Cap Value",
+            "type": "integer"
+          },
+          "order_cap_weeks_per_line": {
+            "title": "Order Cap Weeks Per Line",
+            "type": "integer"
+          },
+          "refresh_hour": {
+            "title": "Refresh Hour",
+            "type": "integer"
+          },
+          "service_level": {
+            "title": "Service Level",
+            "type": "number"
+          },
+          "learned_min_weeks": {
+            "title": "Learned Min Weeks",
+            "type": "integer"
+          },
+          "learned_max_rse": {
+            "title": "Learned Max Rse",
+            "type": "number"
+          },
+          "learned_demote_rse": {
+            "title": "Learned Demote Rse",
+            "type": "number"
+          },
+          "category_default_min_items": {
+            "title": "Category Default Min Items",
+            "type": "integer"
+          },
+          "seasonal_multiplier_enabled": {
+            "title": "Seasonal Multiplier Enabled",
+            "type": "boolean"
+          },
+          "reason_text_enabled": {
+            "title": "Reason Text Enabled",
+            "type": "boolean"
+          },
+          "write_model_stock_policies": {
+            "title": "Write Model Stock Policies",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "default_lead_time_days",
+          "target_coverage_days",
+          "order_cap_value",
+          "order_cap_weeks_per_line",
+          "refresh_hour",
+          "service_level",
+          "learned_min_weeks",
+          "learned_max_rse",
+          "learned_demote_rse",
+          "category_default_min_items",
+          "seasonal_multiplier_enabled",
+          "reason_text_enabled",
+          "write_model_stock_policies"
+        ],
+        "title": "PurchasingSettingsOut",
+        "type": "object"
+      },
+      "PurchasingSettingsIn": {
+        "properties": {
+          "default_lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Lead Time Days"
+          },
+          "target_coverage_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Coverage Days"
+          },
+          "order_cap_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Cap Value"
+          },
+          "order_cap_weeks_per_line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Cap Weeks Per Line"
+          },
+          "refresh_hour": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Hour"
+          },
+          "service_level": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Level"
+          },
+          "learned_min_weeks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learned Min Weeks"
+          },
+          "learned_max_rse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learned Max Rse"
+          },
+          "learned_demote_rse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learned Demote Rse"
+          },
+          "category_default_min_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Default Min Items"
+          },
+          "seasonal_multiplier_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seasonal Multiplier Enabled"
+          },
+          "reason_text_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Text Enabled"
+          },
+          "write_model_stock_policies": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Write Model Stock Policies"
+          }
+        },
+        "title": "PurchasingSettingsIn",
         "type": "object"
       }
     },

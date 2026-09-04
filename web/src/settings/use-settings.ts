@@ -5,6 +5,7 @@ import {
   FlaskConical,
   MonitorSmartphone,
   ScrollText,
+  ShoppingCart,
   Truck,
   UserRound,
   Users,
@@ -93,6 +94,16 @@ export const SETTINGS: SettingsSection[] = [
     label: "Facturación electrónica",
     group: "Operación",
     icon: FileText,
+    roles: OFFICE,
+  },
+  {
+    // §B.8.4·4 · **Operación**, and S6's is the group's second section. It is
+    // reached at `/purchasing?settings=purchasing`, so the section is a link
+    // and `Escape` returns where you were.
+    id: "purchasing",
+    label: "Compras",
+    group: "Operación",
+    icon: ShoppingCart,
     roles: OFFICE,
   },
   {

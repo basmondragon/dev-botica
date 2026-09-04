@@ -142,3 +142,4 @@ from core.sync import jobs as sync_jobs  # noqa: E402,F401  -- S2's stale-device
 from core.inventory import jobs as inventory_jobs  # noqa: E402,F401  -- S3's three
 from core.counter import jobs as counter_jobs  # noqa: E402,F401  -- S4's stale-shift notice
 from core.fiscal import jobs as fiscal_jobs  # noqa: E402,F401  -- S5's delivery and sweep
+from core.purchasing import jobs as purchasing_jobs  # noqa: E402,F401  -- S6's five

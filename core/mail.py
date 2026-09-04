@@ -114,6 +114,32 @@ def send_expiry_digest(
     )
 
 
+def send_purchase_order(
+    *, email, tenant_name, location_name, supplier_name, number, total, lines
+):
+    """One approved order, to the supplier who is going to fill it.
+
+    **This is the whole of dispatch** (S6, *Scope · Out*): no EDI, no supplier
+    portal, no supplier API. A supplier with no address on file is sent the
+    order by a person through whatever channel they already use, and the order
+    is then marked as sent by hand -- which is a state the screen has a button
+    for rather than a failure it hides.
+    """
+    return _send(
+        "purchase_order",
+        email,
+        f"{tenant_name} · orden de compra {number} ({location_name})",
+        {
+            "tenant_name": tenant_name,
+            "location_name": location_name,
+            "supplier_name": supplier_name,
+            "number": number,
+            "total": total,
+            "lines": lines,
+        },
+    )
+
+
 def send_stale_shifts(*, recipients, tenant_name, location_name, run_date, shifts):
     """Turnos left open more than a day, to the network's owner and
     administrators.

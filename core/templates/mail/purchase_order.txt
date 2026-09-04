@@ -1,0 +1,10 @@
+{{ tenant_name }} · orden de compra {{ number }}
+
+Sede: {{ location_name }}
+Proveedor: {{ supplier_name }}
+
+{% for line in lines %}{{ line.quantity }}  {{ line.item }}{% if line.presentation %} {{ line.presentation }}{% endif %}
+{% endfor %}
+Total de la orden: {{ total }}
+
+Esta orden fue aprobada en Botica por la droguería. Responda a este correo para confirmar la entrega o para avisar de un faltante.

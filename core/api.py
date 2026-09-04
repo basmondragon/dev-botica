@@ -296,8 +296,8 @@ def me(request):
 
 @api.get("/nav-counters", response=NavCountersOut, auth=any_member)
 def nav_counters(request):
-    """§B.8.2 · the nav's counters. S6 fills `purchasing`; a stage adds its key
-    here rather than fetching its own count.
+    """§B.8.2 · the nav's counters. A stage adds its key here rather than
+    fetching its own count.
 
     **`counter` is ventas abiertas, and only for an office identity.** A
     `cashier` reads the same number from their own local store at zero latency
@@ -306,14 +306,16 @@ def nav_counters(request):
     surface that stops working when the cable comes out (§4, A4).
     """
     from core.counter.sales import open_sales
+    from core.purchasing.api import suggested_order_count
 
     counters: dict[str, int] = {}
     if request.user.role != Role.CASHIER:
         try:
-            counters["counter"] = open_sales(
-                request.tenant_id,
-                scoping.readable_locations(request.user, request.tenant_id),
-            )
+            readable = scoping.readable_locations(request.user, request.tenant_id)
+            counters["counter"] = open_sales(request.tenant_id, readable)
+            # S6 · **órdenes sugeridas, which is work waiting.** Never a total
+            # of every order, and zero renders nothing at all (§B.8.2).
+            counters["purchasing"] = suggested_order_count(request.tenant_id, readable)
         except scoping.Misconfigured:
             counters = {}
     return {"counters": counters, "critical": []}
@@ -957,6 +959,23 @@ api.add_router("", counter_router)
 from core.fiscal.api import router as fiscal_router  # noqa: E402
 
 api.add_router("", fiscal_router)
+
+
+# ---------------------------------------------------------------------------
+# S6 · purchasing
+#
+# The same rule again: a Router, not a second schema. Its paths already read
+# `/purchase-orders`, `/goods-receipts`, `/demand-forecasts` and
+# `/settings/purchasing`, so the prefix is empty here too.
+#
+# **No endpoint here is one a till calls, and no purchasing table reaches a
+# device.** Compras is the office read model, served over the network per view,
+# so S2's sync registry is not amended by this stage (rule 9, §4, A4).
+# ---------------------------------------------------------------------------
+
+from core.purchasing.api import router as purchasing_router  # noqa: E402
+
+api.add_router("", purchasing_router)
 
 
 @api.exception_handler(LineRefused)

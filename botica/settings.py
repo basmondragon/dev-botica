@@ -268,6 +268,15 @@ BOTICA_VERSION = _env("BOTICA_VERSION", "") or "0.1.0"
 # process environment. See `core.fiscal.secrets` for the key form.
 BOTICA_INVOICING_CREDENTIALS: dict[str, str] = {}
 
+# The model gateway (§10, ledger cross-stage services). **One path to the
+# vendor, owned by S8**, built by whichever of S6 and S8 landed first: a second
+# client would be a second spend cap, which is no cap at all. Unset is the
+# ordinary configuration -- the reason text on a purchase order degrades to its
+# deterministic strings and nothing else in the product changes.
+BOTICA_GATEWAY_BASE_URL = _env("BOTICA_GATEWAY_BASE_URL", "")
+BOTICA_GATEWAY_API_KEY = _env("BOTICA_GATEWAY_API_KEY", "")
+BOTICA_GATEWAY_MODEL = _env("BOTICA_GATEWAY_MODEL", "anthropic/claude-sonnet-4.5")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
