@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { ApiError } from "@/api/client";
 import {
   useCategories,
   useCreateItem,
   useDeleteSupplierItem,
+  useDismissProposal,
   useItem,
   useManufacturers,
   useSaveSupplierItem,
@@ -22,7 +23,7 @@ import { Button } from "@/ui/button";
 import { cn } from "@/ui/cn";
 import { Combobox } from "@/ui/combobox";
 import { Checkbox, Field, Input, Textarea } from "@/ui/field";
-import { dayMonth, money } from "@/ui/format";
+import { dayMonth, DOT, money } from "@/ui/format";
 import { RecordPanel } from "@/ui/panel";
 import { Select } from "@/ui/select";
 import { Badge, INVIMA_STATUS } from "@/ui/status";
@@ -46,6 +47,8 @@ export function ItemPanel({
   creating,
   me,
   locations,
+  proposalId,
+  suggestedPrice,
   onClose,
   onCreated,
 }: {
@@ -53,6 +56,11 @@ export function ItemPanel({
   creating: boolean;
   me: Me;
   locations: Location[];
+  /** The S7 suggestion this editor was opened against, where it was opened
+   *  from Precios. **Precios writes nothing** -- it changes route, and the
+   *  write that follows is this one. */
+  proposalId?: string;
+  suggestedPrice?: string;
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
@@ -95,6 +103,8 @@ export function ItemPanel({
       item={item}
       elevated={elevated}
       locations={locations}
+      proposalId={proposalId}
+      suggestedPrice={suggestedPrice}
       onClose={onClose}
       onCreated={onCreated}
     />
@@ -180,12 +190,16 @@ function ItemForm({
   item,
   elevated,
   locations,
+  proposalId,
+  suggestedPrice,
   onClose,
   onCreated,
 }: {
   item: ItemDetail | undefined;
   elevated: boolean;
   locations: Location[];
+  proposalId?: string;
+  suggestedPrice?: string;
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
@@ -647,7 +661,12 @@ function ItemForm({
         {item && elevated ? (
           <>
             <Section title="Precio">
-              <PriceSection item={item} locations={locations} />
+              <PriceSection
+                item={item}
+                locations={locations}
+                proposalId={proposalId}
+                suggestedPrice={suggestedPrice}
+              />
             </Section>
             {!service ? (
               <Section title="Proveedores">
@@ -815,16 +834,42 @@ function BarcodeList({
 function PriceSection({
   item,
   locations,
+  proposalId,
+  suggestedPrice,
 }: {
   item: ItemDetail;
   locations: Location[];
+  proposalId?: string;
+  suggestedPrice?: string;
 }) {
-  const [amount, setAmount] = useState("");
+  // **The pre-fill, and it is the whole of what Precios "does" to a price.**
+  // The row action there changed route carrying a number; the field opens with
+  // it typed, and nothing is written until a person presses `Fijar`. A stale
+  // suggestion carries no number at all, so this opens empty and the person
+  // prices it on today's figures.
+  const [amount, setAmount] = useState(suggestedPrice ?? "");
   const [scope, setScope] = useState("");
   const [error, setError] = useState<string | undefined>();
   const setPrice = useSetPrice();
   const withdraw = useWithdrawPrice();
+  const dismiss = useDismissProposal();
   const toast = useToast();
+  // Only the suggestion this editor was opened against, and only while it is
+  // still the live one: an id that names a superseded suggestion would put a
+  // `proposal_id` on a price row that the adoption measurement would read as
+  // evidence of something that never happened. The server checks it again.
+  const proposal =
+    item.proposal && item.proposal.id === proposalId ? item.proposal : null;
+  // **Arriving from Precios lands on the field, not on the top of the panel.**
+  // `Precio` is the last-but-one section of a ten-section form, so a person who
+  // pressed `Ajustar precio` would otherwise open a scrolled-to-the-top editor
+  // and have to hunt for the number that was already typed for them.
+  const priceField = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!proposal) return;
+    priceField.current?.scrollIntoView({ block: "center" });
+    priceField.current?.focus();
+  }, [proposal]);
 
   const current = item.prices.filter((row) => row.current);
   const network = current.find((row) => !row.location_id);
@@ -850,6 +895,41 @@ function PriceSection({
         </p>
       ) : null}
 
+      {proposal ? (
+        <div className="rounded-card border border-edge-soft bg-chrome px-3 py-2.5">
+          <p className="text-12 text-ink">
+            {`Propuesta de Precios ${DOT} ${money(Number(proposal.suggested_price))}`}
+          </p>
+          <p className="mt-1 text-11 text-ink-body">{proposal.reason}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="xs"
+              busy={dismiss.isPending}
+              onClick={() =>
+                dismiss.mutate(proposal.id, {
+                  onSuccess: () => {
+                    setAmount("");
+                    toast("Se descartó la propuesta. No se cambió el precio.");
+                  },
+                  onError: (failure) =>
+                    toast(
+                      failure instanceof ApiError
+                        ? failure.message
+                        : "No pudimos descartar la propuesta.",
+                    ),
+                })
+              }
+            >
+              Descartar
+            </Button>
+            <span className="text-11 text-ink-note">
+              Descartar no cambia el precio. Queda registrado.
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       <Field
         label="Nuevo precio"
         htmlFor="item-price"
@@ -867,6 +947,7 @@ function PriceSection({
         <div className="flex items-center gap-2">
           <Input
             id="item-price"
+            ref={priceField}
             inputMode="decimal"
             value={amount}
             invalid={!!error}
@@ -903,7 +984,14 @@ function PriceSection({
               setPrice.mutate(
                 {
                   id: item.id,
-                  body: { price: amount.trim(), location_id: scope || null },
+                  body: {
+                    price: amount.trim(),
+                    location_id: scope || null,
+                    // Carried only where the editor was opened against a live
+                    // suggestion, so what lands is a `manual` row with this
+                    // person's name **and** a link back to what informed it.
+                    proposal_id: proposal ? proposal.id : null,
+                  },
                 },
                 {
                   onSuccess: () => {

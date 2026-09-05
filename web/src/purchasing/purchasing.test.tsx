@@ -50,6 +50,26 @@ function sources() {
     }));
 }
 
+/**
+ * Where a rendered label is written down.
+ *
+ * **The property is that no component hard-codes one** -- every string a screen
+ * shows comes from a `vocabulary.ts`. It is deliberately not *exactly one file
+ * in the whole app*: §B.7.4 gives `purchase_orders.discarded` and
+ * `price_proposals.dismissed` the same word for the same reason, and two stages
+ * naming `Descartada` in their own vocabularies is the design system working
+ * rather than a duplication.
+ */
+function declarations(label: string) {
+  const hits = sources().flatMap(({ file, code }) =>
+    code.includes(`"${label}"`) ? [file.replace(SRC + "/", "")] : [],
+  );
+  return {
+    hardCoded: hits.filter((file) => !file.endsWith("vocabulary.ts")),
+    vocabularies: hits.filter((file) => file.endsWith("vocabulary.ts")),
+  };
+}
+
 function line(overrides: Partial<PurchaseOrderLineRow> = {}) {
   return {
     id: "line-1",
@@ -215,27 +235,22 @@ describe("the status vocabulary", () => {
     expect(ORDER_STATUS.discarded.label).toBe("Descartada");
   });
 
-  it("declares each of the six labels exactly once", () => {
-    const files = sources();
+  it("declares each of the six labels in one vocabulary and nowhere else", () => {
     for (const meaning of Object.values(ORDER_STATUS)) {
-      const hits = files.flatMap(({ file, code }) =>
-        code.includes(`"${meaning.label}"`) ? [file] : [],
-      );
-      expect(hits, meaning.label).toHaveLength(1);
-      expect(hits[0]).toContain("vocabulary.ts");
+      const { hardCoded, vocabularies } = declarations(meaning.label);
+      expect(hardCoded, meaning.label).toHaveLength(0);
+      expect(vocabularies).toContain("purchasing/vocabulary.ts");
     }
   });
 
-  it("names the three regimes and the three bands once each", () => {
-    const files = sources();
+  it("names the three regimes and the three bands in one vocabulary", () => {
     for (const label of [
       ...Object.values(BASIS_LABEL),
       ...Object.values(BAND_LABEL),
     ]) {
-      const hits = files.flatMap(({ file, code }) =>
-        code.includes(`"${label}"`) ? [file] : [],
-      );
-      expect(hits, label).toHaveLength(1);
+      const { hardCoded, vocabularies } = declarations(label);
+      expect(hardCoded, label).toHaveLength(0);
+      expect(vocabularies).toContain("purchasing/vocabulary.ts");
     }
   });
 });

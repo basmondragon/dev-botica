@@ -234,6 +234,35 @@ export function useSetPrice() {
   });
 }
 
+/**
+ * **The other half of a person's decision** (A11): declining a suggestion.
+ *
+ * It lives here, on S1's own client, because the write is S1's -- `taken`,
+ * `modified` and `dismissed` are the three states a decision reaches and all
+ * three are stamped by the stage that carried the decision out. Precios has no
+ * write path to a suggestion's outcome at all, which is what makes the
+ * amendment a property of the routes rather than a policy.
+ */
+export function useDismissProposal() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (proposalId: string) => {
+      const { data, error, response } = await api.POST(
+        "/api/price-proposals/{proposal_id}/dismiss",
+        { params: { path: { proposal_id: proposalId } } },
+      );
+      if (error || !data)
+        throw toApiError(response, error, "No pudimos descartar la propuesta.");
+      return data;
+    },
+    onSuccess: () => {
+      invalidate(client);
+      void client.invalidateQueries({ queryKey: ["pricing-items"] });
+      void client.invalidateQueries({ queryKey: ["pricing-summary"] });
+    },
+  });
+}
+
 export function useWithdrawPrice() {
   const client = useQueryClient();
   return useMutation({

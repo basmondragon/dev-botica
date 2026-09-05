@@ -50,6 +50,14 @@ function validateSearch(search: Record<string, unknown>): CatalogSearch {
     sort: text(search.sort),
     order: search.order === "desc" ? "desc" : undefined,
     item: text(search.item),
+    // **Where a suggestion arrives from Precios.** The row action there is a
+    // navigation rather than a write, so the suggestion travels in the URL and
+    // the editor opens with the number already in the field -- and what lands
+    // in `item_prices` is a `manual` row carrying the person's name and this
+    // `proposal_id` (A11). A stale suggestion carries neither, and the field
+    // opens empty.
+    proposal: text(search.proposal),
+    sugerido: text(search.sugerido),
     settings: text(search.settings),
   };
 }

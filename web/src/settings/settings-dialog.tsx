@@ -10,6 +10,7 @@ import { ActivitySection } from "./activity";
 import { CustomersSection } from "./catalog-customers";
 import { DevicesSection } from "./devices";
 import { InvoicingSection } from "./invoicing";
+import { PricingSection } from "./pricing";
 import { PurchasingSection } from "./purchasing";
 import { SuppliersSection } from "./catalog-suppliers";
 import { TaxonomySection } from "./catalog-taxonomy";
@@ -138,6 +139,8 @@ function Dialog({ me, id }: { me: Me; id: string }) {
               <InvoicingSection me={me} />
             ) : current?.id === "purchasing" ? (
               <PurchasingSection />
+            ) : current?.id === "pricing" ? (
+              <PricingSection />
             ) : current?.id === "activity" ? (
               <ActivitySection />
             ) : (

@@ -978,6 +978,26 @@ from core.purchasing.api import router as purchasing_router  # noqa: E402
 api.add_router("", purchasing_router)
 
 
+# ---------------------------------------------------------------------------
+# S7 · pricing
+#
+# The same rule again: a Router, not a second schema. Its paths already read
+# `/pricing/items`, `/pricing/summary`, `/pricing/adoption`, `/pricing/caps` and
+# `/settings/pricing`, so the prefix is empty here too.
+#
+# **Not one route on this router writes a price** (A11). There is no approve, no
+# apply, no revert, no dismiss and no batch under `/api/pricing/` -- every one of
+# those returns 404 rather than 403, because a 403 is a route standing behind a
+# policy somebody can change, and the amendment replaced that with a property of
+# the schema. A suggestion becomes a price in S1's editor, which is where the
+# resolution is stamped.
+# ---------------------------------------------------------------------------
+
+from core.pricing.api import router as pricing_router  # noqa: E402
+
+api.add_router("", pricing_router)
+
+
 @api.exception_handler(LineRefused)
 def _line_refused(request, exc):
     """One refused line of a multi-line entry, at field scope (§B.10.3).

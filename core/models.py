@@ -3240,3 +3240,482 @@ class DemandForecast(TenantScopedModel):
 
     def __str__(self):
         return f"{self.item_id} @ {self.location_id} · {self.basis}"
+
+
+# ---------------------------------------------------------------------------
+# S7 · pricing. Two tables and five enums (ledger, architecture §3, §1, A11).
+#
+# **Nothing in this stage writes a price.** There is no `INSERT` and no `UPDATE`
+# on `item_prices.price` anywhere behind `core/pricing/`, there is no `model`
+# value in `price_source` to record one under, and there is no scheduled
+# repricing and no bulk apply (A11). A suggestion becomes a price when a person
+# changes it in S1's own editor, and the row that results is `manual`, carries
+# their name, and carries `proposal_id` where a suggestion informed it.
+#
+# So the two tables here are an **analysis**, never an instruction. What makes
+# that analysis worth keeping is the pair `suggested_price` / `resolved_price`:
+# what the engine said, beside what the person chose. It is the same measurement
+# `purchase_order_lines.suggested_quantity` versus `approved_quantity` exists to
+# preserve, and overwriting either half destroys it permanently.
+#
+# **`elasticity_estimates.elasticity` is nullable and that is load-bearing.** An
+# item whose price has never moved does not have a small elasticity; it has
+# none, because there is no variation to regress on. A zero there is a claim of
+# *perfect inelasticity* -- raise the price as far as you like and sell exactly
+# as many -- which turns every unmoved reference in the catalog, most of them,
+# into a maximum-step rise suggested with a straight face.
+#
+# Both tables carry the same S0 convention as the thirty-four above; their
+# policies live in migration 0018. They carry **no client-write quartet**:
+# Precios is an office surface, no pricing table reaches a device, and rule 9's
+# sync registry is not amended by this stage (§4, A4).
+# ---------------------------------------------------------------------------
+
+
+class PriceProposalStatus(models.TextChoices):
+    """Six values, and the split down the middle is A11 (§3, ledger).
+
+    **S7 writes the first two and the last; S1 writes the middle three**, when a
+    person acts on a suggestion in the price editor. `approved`, `applied` and
+    `reverted` do not exist: they went with the write path, and there is nothing
+    to apply and nothing to revert, because the price change was a person's edit
+    and is undone the way any price edit is undone.
+    """
+
+    PROPOSED = "proposed", "Propuesta"
+    ABOVE_CAP = "above_cap", "Sobre el tope regulado"
+    TAKEN = "taken", "Tomada"
+    MODIFIED = "modified", "Modificada"
+    DISMISSED = "dismissed", "Descartada"
+    SUPERSEDED = "superseded", "Reemplazada"
+
+
+#: The three a person's decision reaches, written by S1's editor and by nothing
+#: else. Named here rather than spelled out at four call sites, because "is this
+#: proposal resolved" is asked by the run, by the grid and by the measurement.
+RESOLVED_PROPOSAL_STATUSES = (
+    PriceProposalStatus.TAKEN,
+    PriceProposalStatus.MODIFIED,
+    PriceProposalStatus.DISMISSED,
+)
+
+#: The two a run may supersede. A resolved suggestion is never touched: it is
+#: the measurement record, and a job that rewrote one would be erasing the only
+#: evidence this stage produces about its own worth.
+LIVE_PROPOSAL_STATUSES = (
+    PriceProposalStatus.PROPOSED,
+    PriceProposalStatus.ABOVE_CAP,
+)
+
+
+class ElasticityStatus(models.TextChoices):
+    """What a row with a null `elasticity` is saying, in six words rather than
+    one -- because *we could not measure this* and *this reference has no cost
+    loaded* send a reader to two different places."""
+
+    ESTIMATED = "estimated", "Estimada"
+    INSUFFICIENT_OBSERVATIONS = "insufficient_observations", "Pocas semanas"
+    INSUFFICIENT_VARIATION = "insufficient_variation", "Sin variación de precio"
+    NO_SALES = "no_sales", "Sin ventas en la ventana"
+    NO_COST = "no_cost", "Sin costo cargado"
+    INACTIVE = "inactive", "Referencia inactiva"
+
+
+class NoProposalReason(models.TextChoices):
+    """Why an item that **was** evaluated got no proposal anyway.
+
+    Separating this from `elasticity_status` is what lets the screen distinguish
+    *we could not measure this* from *we looked and there is nothing worth
+    doing* -- the distinction the whole stage is about. The last three belong to
+    the margin rule and to the precedence between the two engines.
+    """
+
+    LOW_CONFIDENCE = "low_confidence", "Estimación de baja confianza"
+    BELOW_MATERIALITY = "below_materiality", "Impacto por debajo del mínimo"
+    COOLDOWN = "cooldown", "El precio cambió hace poco"
+    CAP_BLOCKS_RAISE = "cap_blocks_raise", "Sin tope regulado conocido"
+    CAP_AT_CURRENT = "cap_at_current", "El precio ya está en el tope"
+    AT_MARGIN_GOAL = "at_margin_goal", "Ya está en la meta de margen"
+    MARGIN_GAP_IMMATERIAL = "margin_gap_immaterial", "La diferencia no alcanza"
+    ELASTIC_VETO = "elastic_veto", "Demanda sensible al precio"
+
+
+class ProposalBasis(models.TextChoices):
+    """**§1's basis, made a column.** Which engine produced the row, carried on
+    every proposal and rendered in every proposal's own grid row -- not derived
+    at read time from whether `elasticity_estimate_id` happens to be null,
+    because a basis a reader has to infer is a basis a report will infer
+    differently."""
+
+    MARGIN_RULE = "margin_rule", "Meta de margen"
+    ELASTICITY = "elasticity", "Elasticidad"
+
+
+class CapStatus(models.TextChoices):
+    """Checked text, not a Postgres enum: it is written into `items.cap_status`,
+    a `varchar` S1 created empty, and mirrored into `items.custom.pricing`.
+
+    **A null cap means *unknown*, never *uncapped*** (§11.4, A11). Every item
+    starts `unknown`, and `not_regulated` is a claim somebody made -- a source
+    that states the reference is not under CNPMDM control -- rather than the
+    absence of one.
+    """
+
+    CAPPED = "capped", "Con tope regulado"
+    NOT_REGULATED = "not_regulated", "Sin regulación de precio"
+    UNKNOWN = "unknown", "Tope desconocido"
+
+
+class Confidence(models.TextChoices):
+    """How much demand signal stood behind a figure. Checked text, for the same
+    reason `cap_status` is: the ledger names five enums for this stage and this
+    is not one of them.
+
+    **A `margin_rule` proposal is `low` by construction, and that is not a
+    demerit in it**: its arithmetic is exact, and what is unknown is how demand
+    will respond -- which is precisely what this column measures.
+    """
+
+    HIGH = "high", "Alta"
+    MEDIUM = "medium", "Media"
+    LOW = "low", "Baja"
+
+
+class CostSource(models.TextChoices):
+    """Where a proposal's cost basis came from. Coined, and stamped rather than
+    re-derived: a suggestion read a week later must say what it was computed
+    against, not what the shelf holds today."""
+
+    LOTS = "lots", "Lotes en existencia"
+    SUPPLIER = "supplier", "Lista del proveedor"
+
+
+#: The whole vocabulary a Precios sentence is composed from, and it is **fixed
+#: and closed**. Every string on that surface renders from one of these codes
+#: with the row's own figures interpolated; S7 calls no model gateway, and there
+#: is no free text and no generated prose anywhere on it (§10).
+#:
+#: A constrained text column rather than a Postgres enum -- the choice
+#: `stock_moves.reason` and `purchase_order_lines.reason_code` already made, and
+#: for the same reason: a later stage adds a code without a type migration.
+PRICING_REASON_CODES = (
+    "inelastic_raise",
+    "elastic_reduce",
+    "cap_bound_raise",
+    "margin_below_goal",
+    "above_regulated_cap",
+)
+
+
+class ElasticityEstimate(TenantScopedModel):
+    """One row per item per grain per run, written for **every item evaluated**
+    -- including the ones that could not be estimated, with `elasticity` null
+    and the reason recorded.
+
+    An item absent from this table is an item that vanished from the screen
+    without saying so, which is the failure the whole row-per-evaluated-item
+    rule exists to prevent.
+
+    `location_id` null is the **network grain**, and it is the one a proposal
+    reads, because a proposal is network-wide (`price_proposals` carries no
+    `location_id`). A per-sede estimate is written only where that sede clears
+    every floor on its own, and it flags heterogeneity in the record panel --
+    never prices a sede differently, which v1 cannot express.
+    """
+
+    item = models.ForeignKey(
+        Item, on_delete=models.CASCADE, related_name="elasticity_estimates"
+    )
+    location = models.ForeignKey(
+        Location, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
+    )
+
+    #: **Nullable, and it is the load-bearing decision of this table.** Nothing
+    #: downstream may coalesce it to zero: an unmoved reference has no
+    #: elasticity, not a small one, and a zero is a claim of perfect
+    #: inelasticity.
+    elasticity = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    r2 = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
+    #: `26w` -- the window the estimator **asked for**, not the one it got.
+    #: `observations` is what survived, and the two are read separately.
+    window = models.CharField(max_length=8)
+    #: Surviving **weeks**, which is what the panel renders as `sobre 22
+    #: semanas` and what every floor in this stage is stated in.
+    observations = models.PositiveSmallIntegerField(default=0)
+    computed_at = models.DateTimeField(default=timezone.now)
+    model_version = models.CharField(max_length=64)
+
+    status = EnumField(
+        max_length=32, choices=ElasticityStatus, db_enum="elasticity_status"
+    )
+    #: Why this reference got no proposal, on a reference that **was** evaluated.
+    #: Null where it did get one, and null where nothing could evaluate it at
+    #: all -- `status` is what speaks then.
+    no_proposal_reason = EnumField(
+        max_length=32,
+        choices=NoProposalReason,
+        db_enum="no_proposal_reason",
+        null=True,
+        blank=True,
+    )
+
+    std_error = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    ci_low = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    ci_high = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    distinct_prices = models.PositiveSmallIntegerField(default=0)
+    #: The standard deviation of `ln(price)` over the surviving weeks. The
+    #: variation floor is stated against it, so it is stored rather than
+    #: recomputed by anyone who wants to check the floor.
+    price_dispersion = models.DecimalField(
+        max_digits=8, decimal_places=5, null=True, blank=True
+    )
+    #: **Null means the replay was not run**, which is not the same as zero
+    #: weeks excluded. The stock-out replay is expensive and is run only where
+    #: an estimate could have cleared the floors without it -- exclusions only
+    #: ever remove weeks, so a reference short of the floors before them is
+    #: short of them after, and replaying it would change nothing but the clock.
+    weeks_excluded_stockout = models.PositiveSmallIntegerField(null=True, blank=True)
+    weeks_excluded_promo = models.PositiveSmallIntegerField(null=True, blank=True)
+    #: What share of the surviving window is S6's imported history rather than
+    #: Botica's own. A majority-imported window caps `confidence` at `medium`:
+    #: those rows record a price the previous system charged and a cost we did
+    #: not pay.
+    imported_share = models.DecimalField(
+        max_digits=4, decimal_places=3, null=True, blank=True
+    )
+    confidence = models.CharField(max_length=8, choices=Confidence, blank=True)
+
+    class Meta:
+        db_table = "elasticity_estimates"
+        ordering = ["-computed_at", "item__name"]
+        indexes = [
+            # Rule 4 · the grid's join and the run's own read-back, both of
+            # which want one run's rows for one item at the network grain.
+            models.Index(
+                fields=["tenant", "item", "computed_at"],
+                name="elasticity_by_item_run",
+            ),
+        ]
+        constraints = [
+            # Postgres 18 (§9) treats the null network grain as a value, so one
+            # run cannot write two estimates for the same item at the same
+            # grain. Without `NULLS NOT DISTINCT` the one grain a proposal
+            # actually reads would be the one the constraint could not protect.
+            models.UniqueConstraint(
+                fields=["tenant", "item", "location", "computed_at"],
+                name="one_estimate_per_item_grain_and_run",
+                nulls_distinct=False,
+            ),
+            # **The zero this table must never hold.** A build agent that
+            # defaults the column rather than leaving it null turns every
+            # never-repriced reference into a maximum-step rise, and the
+            # database is what makes that a refusal instead of a code review.
+            models.CheckConstraint(
+                condition=~models.Q(elasticity=0),
+                name="an_elasticity_is_never_exactly_zero",
+            ),
+            # An estimate exists exactly when the fit succeeded. The two
+            # halves of this table's contract, stated once.
+            models.CheckConstraint(
+                condition=models.Q(
+                    status=ElasticityStatus.ESTIMATED, elasticity__isnull=False
+                )
+                | (
+                    ~models.Q(status=ElasticityStatus.ESTIMATED)
+                    & models.Q(elasticity__isnull=True)
+                ),
+                name="an_estimated_row_carries_an_elasticity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence="")
+                | models.Q(confidence__in=Confidence.values),
+                name="elasticity_confidence_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} · {self.status}"
+
+
+class PriceProposal(TenantScopedModel):
+    """The analysis of one reference's price. **Never an instruction** (A11).
+
+    **`suggested_price` is written once, at the run, and never again.** No
+    endpoint, job or migration may move it: `resolved_price` is what the person
+    chose, and the gap between the two is the whole reason this table survives
+    the amendment. A build that moved `suggested_price` to match a decision
+    would destroy the adoption measurement permanently and nothing recovers it.
+
+    It carries **no `location_id`**: a suggestion is network-wide, and whatever
+    scope the resulting price has is whatever S1's editor gave the person who
+    set it. A sede whose demand genuinely differs cannot be suggested a
+    different price in v1, and the record panel says so rather than implying
+    otherwise.
+    """
+
+    item = models.ForeignKey(
+        Item, on_delete=models.CASCADE, related_name="price_proposals"
+    )
+    #: **Which engine produced it**, on every row, stamped rather than derived.
+    basis = EnumField(max_length=16, choices=ProposalBasis, db_enum="proposal_basis")
+    #: Null on every `margin_rule` row, and on those rows the record panel
+    #: renders the estimate's own `elasticity_status` sentence instead -- a
+    #: statement of method rather than an apology.
+    elasticity_estimate = models.ForeignKey(
+        ElasticityEstimate,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="proposals",
+    )
+    status = EnumField(
+        max_length=16,
+        choices=PriceProposalStatus,
+        db_enum="price_proposal_status",
+        default=PriceProposalStatus.PROPOSED,
+    )
+
+    #: Gross of IVA, per base unit -- `item_prices.price` is what the customer
+    #: pays (S7, *Data*). Margin is computed net of IVA from it.
+    current_price = models.DecimalField(max_digits=12, decimal_places=2)
+    suggested_price = models.DecimalField(max_digits=12, decimal_places=2)
+    #: **Percentages, not shares**: `32.80` is 32,8%. Every figure in this stage
+    #: whose name ends `_pct` or reads `margin` is in points, so the settings
+    #: group, the column and the screen never disagree about a factor of a
+    #: hundred.
+    current_margin = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True
+    )
+    projected_margin = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True
+    )
+    #: **Nullable.** A margin-rule suggestion on a reference with no trailing
+    #: sales has no volume to project against, and a zero there would read as
+    #: *no impact* rather than as *no basis for an impact*.
+    estimated_monthly_impact = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True
+    )
+    #: Coined, on this stage's own table (rule 1): `q̂₃₀`, the item's trailing
+    #: 30-day units across the network after the estimator's own exclusions.
+    #: **Null is what makes `Sin volumen` structural** -- the impact above is
+    #: null exactly when this is, so the screen never has to infer *no volume*
+    #: from a zero peso figure. It is also the denominator the panel needs to
+    #: say what a rise costs in units, which no other stored column can give.
+    trailing_monthly_units = models.IntegerField(null=True, blank=True)
+    #: `true` only when a cap is **known** and the proposed price is at or below
+    #: it. An unknown cap yields `false`, because a boolean named *respects the
+    #: regulated cap* cannot be true against a cap nobody holds.
+    respects_regulated_cap = models.BooleanField(default=False)
+
+    #: **Written by S1, not by S7** -- the person's decision is recorded by the
+    #: stage that carried it out (ledger, A11).
+    resolved_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: S0's referential rule: a stage referencing `users` does so ON DELETE SET
+    #: NULL **and stamps the readable identity at write time**. `Tomada el 22/08
+    #: por Marcela Ríos` is a line this screen renders, and a decision whose
+    #: author was later removed from the roster must not read as nobody's.
+    resolved_by_name = models.CharField(max_length=200, blank=True)
+    resolved_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    confidence = models.CharField(max_length=8, choices=Confidence)
+    cost_basis = models.DecimalField(max_digits=12, decimal_places=2)
+    cost_source = models.CharField(max_length=16, choices=CostSource)
+    #: The move as a signed percentage of the current price, so the screen never
+    #: recomputes it and the rounding rule's own guarantee -- that a step never
+    #: passes `max_single_step_pct` -- is checkable on the stored row.
+    step_pct = models.DecimalField(max_digits=6, decimal_places=2)
+    #: Points still remaining to `margin_goal_pct` after the suggested step.
+    #: Null on an elasticity row, which is not aiming at the goal.
+    margin_gap_pp = models.DecimalField(
+        max_digits=7, decimal_places=2, null=True, blank=True
+    )
+    reason_code = models.CharField(max_length=48)
+    #: The cap **as it stood when the run happened**, so a suggestion read a
+    #: week later says what it was checked against rather than what is loaded
+    #: today. Null where no cap was known.
+    regulated_max_price_at_proposal = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    computed_at = models.DateTimeField(default=timezone.now)
+    model_version = models.CharField(max_length=64)
+
+    class Meta:
+        db_table = "price_proposals"
+        ordering = ["-computed_at", "item__name"]
+        indexes = [
+            # Rule 4 · the grid's per-item lookup of the live suggestion, and
+            # the adoption panel's window scan over resolved ones.
+            models.Index(
+                fields=["tenant", "item", "status"], name="price_proposals_by_item"
+            ),
+            models.Index(
+                fields=["tenant", "status", "resolved_at"],
+                name="price_proposals_adoption",
+            ),
+        ]
+        constraints = [
+            # At most one **live** suggestion per reference, so the screen never
+            # shows a reference twice and never has to choose between two
+            # numbers for the same price field. The resolved states are
+            # deliberately outside it: they are the historical record the
+            # measurement reads, and a reference accumulates one per run
+            # somebody acted on.
+            models.UniqueConstraint(
+                fields=["tenant", "item"],
+                condition=models.Q(status__in=LIVE_PROPOSAL_STATUSES),
+                name="one_live_proposal_per_item",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reason_code__in=PRICING_REASON_CODES),
+                name="pricing_reason_code_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(confidence__in=Confidence.values),
+                name="proposal_confidence_is_declared",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(cost_source__in=CostSource.values),
+                name="proposal_cost_source_is_declared",
+            ),
+            # **A margin-rule row rests on no estimate, and says so.** The
+            # basis is the column a report reads; a `margin_rule` row pointing
+            # at an estimate would let a reader conclude the suggestion was
+            # measured.
+            models.CheckConstraint(
+                condition=~models.Q(basis=ProposalBasis.MARGIN_RULE)
+                | models.Q(elasticity_estimate__isnull=True),
+                name="a_margin_rule_proposal_rests_on_no_estimate",
+            ),
+            # A resolution is a person's act, and it is dated. A `resolved_at`
+            # on a live row, or a resolved row with no date, is half a record.
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=RESOLVED_PROPOSAL_STATUSES, resolved_at__isnull=False
+                )
+                | (
+                    ~models.Q(status__in=RESOLVED_PROPOSAL_STATUSES)
+                    & models.Q(resolved_at__isnull=True)
+                ),
+                name="a_resolved_proposal_is_dated",
+            ),
+            # A dismissal writes no price, so it carries no `resolved_price`.
+            # The two together are what let the adoption panel tell *wrong*
+            # from *not now* without guessing.
+            models.CheckConstraint(
+                condition=~models.Q(status=PriceProposalStatus.DISMISSED)
+                | models.Q(resolved_price__isnull=True),
+                name="a_dismissal_carries_no_resolved_price",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} · {self.basis} · {self.suggested_price}"

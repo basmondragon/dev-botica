@@ -34,8 +34,11 @@ from core.models import (
     ItemBarcode,
     ItemPrice,
     ItemType,
+    LIVE_PROPOSAL_STATUSES,
     Location,
     Manufacturer,
+    PriceProposal,
+    PriceProposalStatus,
     Role,
     Supplier,
     SupplierItem,
@@ -173,9 +176,28 @@ class PriceIn(Schema):
     effective_from: date | None = None
     location_id: UUID | None = None
     #: Carried in the schema from S1 so S7 extends this endpoint rather than
-    #: shipping a second one. **Refused while `price_proposals` does not
-    #: exist**, rather than storing an id that names nothing.
+    #: shipping a second one. Where it names a live suggestion on this item, the
+    #: row written carries it and the suggestion is stamped `taken` or
+    #: `modified` with the price the person actually chose (A11).
     proposal_id: UUID | None = None
+
+
+class LiveProposalOut(Schema):
+    """The suggestion the price editor was opened against, if there is one.
+
+    **S7 writes it and S1 reads it.** It is here so the field can render
+    `sugerido $12.850` beside itself and offer `Descartar` -- the two things the
+    Precios screen deliberately does not do, because that screen has no write
+    path to a suggestion's outcome at all.
+    """
+
+    id: UUID
+    basis: str
+    status: str
+    suggested_price: Decimal
+    current_price_at_proposal: Decimal
+    confidence: str
+    reason: str
 
 
 class ItemRow(Schema):
@@ -226,6 +248,12 @@ class ItemDetail(ItemRow):
     barcodes: list[BarcodeOut]
     supplier_items: list[SupplierItemOut]
     prices: list[PriceOut]
+    #: The live S7 suggestion, where there is one and the reader may see costs.
+    #: **Read, never written here** -- the editor renders it beside its own
+    #: field so a person arriving from Precios sees what was suggested and what
+    #: it rests on, and can decline it without leaving the surface that would
+    #: have carried out the decision.
+    proposal: LiveProposalOut | None
 
 
 class ItemIn(Schema):
@@ -512,7 +540,13 @@ def _item_detail(item, *, with_cost):
         "prices": [
             _price_out(one, current_ids, with_author=with_cost) for one in visible
         ],
+        "proposal": _live_proposal(item) if with_cost else None,
     }
+
+
+def _live_proposal(item):
+    proposal = prices.live_proposal(item)
+    return _proposal_out(proposal) if proposal is not None else None
 
 
 def _network_price(rows, current):
@@ -992,14 +1026,34 @@ def create_price(request, item_id: UUID, payload: PriceIn):
     typed or confirmed it.
     """
     item = get_object_or_404(Item, id=item_id, tenant_id=request.tenant_id)
+    proposal = None
     if payload.proposal_id is not None:
-        # The column exists and is nullable from S1; the producer does not.
-        # Storing an id that names nothing would be worse than refusing it.
-        raise HttpError(
-            422,
-            "Todavía no hay propuestas de precio en Botica. El módulo de "
-            "Precios llega en una etapa posterior.",
-        )
+        # **The one thing that connects the two stages**, and it is checked
+        # rather than trusted: an id naming a suggestion that is not live on
+        # this item would put a `proposal_id` on a price row that the adoption
+        # measurement would then read as evidence of something that never
+        # happened.
+        proposal = PriceProposal.objects.filter(
+            id=payload.proposal_id,
+            tenant_id=request.tenant_id,
+            item=item,
+            status__in=LIVE_PROPOSAL_STATUSES,
+        ).first()
+        if proposal is None:
+            raise HttpError(
+                422,
+                "Esa propuesta ya no está vigente para este producto. Vuelva a "
+                "abrir Precios para ver la propuesta actual.",
+            )
+        if proposal.status == PriceProposalStatus.ABOVE_CAP:
+            # A price already above a legal ceiling is a compliance finding, not
+            # a suggestion somebody takes -- and Precios renders it with no
+            # action at all, at any role. This is the same refusal at the door.
+            raise HttpError(
+                422,
+                "Esa referencia está por encima del tope regulado. Corrija el "
+                "precio sin tomar la propuesta.",
+            )
     location = None
     if payload.location_id is not None:
         location = _related(Location, payload.location_id, request, "Esa sede")
@@ -1011,10 +1065,71 @@ def create_price(request, item_id: UUID, payload: PriceIn):
         price=payload.price,
         effective_from=payload.effective_from,
         location=location,
+        proposal_id=proposal.id if proposal else None,
         request_id=request_id.get(),
     )
+    if proposal is not None:
+        prices.take_proposal(proposal=proposal, actor=request.user, price=row.price)
     _, current = prices.history(item)
     return _price_out(row, {one.id for one in current.values()})
+
+
+@router.post(
+    "/price-proposals/{proposal_id}/dismiss",
+    response=LiveProposalOut,
+    auth=owner_or_admin,
+)
+def dismiss_price_proposal(request, proposal_id: UUID):
+    """Decline a suggestion, **from the editor rather than from Precios**.
+
+    It lives on S1's router because the write is S1's: `taken`, `modified` and
+    `dismissed` are the three states a person's decision reaches, and all three
+    are stamped by the stage that carried the decision out. It is deliberately
+    **not** under `/api/pricing/` -- every approve, apply, revert and dismiss
+    path under that prefix returns 404, because a route standing behind a policy
+    is a route somebody can re-enable.
+
+    No `item_prices` row is written, which is what makes a dismissal legible in
+    the measurement: a reference dismissed and then repriced by hand a fortnight
+    later meant *not now*, and one dismissed and left alone meant *wrong*.
+    """
+    proposal = get_object_or_404(
+        PriceProposal.objects.select_related("item"),
+        id=proposal_id,
+        tenant_id=request.tenant_id,
+        status__in=LIVE_PROPOSAL_STATUSES,
+    )
+    if proposal.status == PriceProposalStatus.ABOVE_CAP:
+        # **The same refusal the save path makes.** A price above a legal
+        # ceiling is a compliance finding, not a suggestion somebody declines:
+        # dismissing it would clear the row off the screen and change nothing
+        # about the price the till is charging.
+        raise HttpError(
+            422,
+            "Esa referencia está por encima del tope regulado. Corrija el "
+            "precio en lugar de descartar el aviso.",
+        )
+    prices.dismiss_proposal(
+        proposal=proposal,
+        actor=request.user,
+        tenant_id=request.tenant_id,
+        request_id=request_id.get(),
+    )
+    return _proposal_out(proposal)
+
+
+def _proposal_out(proposal) -> dict:
+    from core.pricing import reasons as pricing_reasons
+
+    return {
+        "id": proposal.id,
+        "basis": proposal.basis,
+        "status": proposal.status,
+        "suggested_price": proposal.suggested_price,
+        "current_price_at_proposal": proposal.current_price,
+        "confidence": proposal.confidence,
+        "reason": pricing_reasons.proposal_sentence(proposal),
+    }
 
 
 @router.delete(

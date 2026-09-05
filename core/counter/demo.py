@@ -168,6 +168,43 @@ DRAW_SHARE = 40
 MOVERS = 48
 MOVER_SHARE = 7  # in ten lines
 
+#: **The own-price elasticity this fixture gives each reference whose price
+#: moves**, and the reason it exists at all is S7.
+#:
+#: A synthetic history in which demand never responds to price is a history no
+#: estimator can learn anything from: the fit finds noise, the noise is large
+#: because the price moved by twelve per cent and the units by a factor of two,
+#: and the coefficient that comes back is a number like `+283` that S7's own
+#: plausibility guard then withholds. A seed that could only ever demonstrate
+#: the *withholding* half of that engine would demonstrate half the stage.
+#:
+#: So a line is **dropped** with the probability a demand curve says it should
+#: be: never added, so no shelf is oversold and no headroom is exceeded, and
+#: deterministic from the line's own key, so the same seed builds the same
+#: history twice. The values are a droguería's own range -- mostly inelastic,
+#: which is the deck's claim, with two elastic references so `elastic_reduce`
+#: and `elastic_veto` have somewhere to land.
+#: How many weeks a reference has to be able to sell in before it is worth
+#: repricing for S7's benefit. It is S7's own eight-week floor plus room for the
+#: weeks its exclusions take out.
+WEEKS_A_FIT_NEEDS = 14
+
+#: And how many units, so a week's count is a figure with a shape rather than a
+#: coin toss: a reference selling one unit a week carries more noise in its own
+#: log than any price move could put there.
+UNITS_A_FIT_NEEDS = 150
+
+DEMAND_ELASTICITY = (
+    Decimal("-0.34"),
+    Decimal("-0.52"),
+    Decimal("-0.71"),
+    Decimal("-0.28"),
+    Decimal("-0.95"),
+    Decimal("-1.42"),
+    Decimal("-1.84"),
+    Decimal("-0.63"),
+)
+
 #: Cash-dominant, because the turno's arithmetic is only meaningful when cash is
 #: a share rather than the whole -- and `GET /api/shifts/{id}` has a breakdown to
 #: render.
@@ -347,6 +384,78 @@ def _floor(row) -> int:
     # No policy means `reorder_point` and `max_quantity` are unknown, so states
     # 5 and 6 are unreachable for the row and only `stockout` is in play.
     return 1
+
+
+#: `spread_keys` is a pure function of the profile and its inputs are two heavy
+#: planners -- S3's whole stock plan and this fixture's own shelf rules. S1's
+#: fixture asks for it once per seed and this one would recompute it, so the
+#: answer is kept: a planner nobody caches is a planner every caller pays for.
+_SPREAD: dict[str, list] = {}
+
+
+def spread_keys(profile) -> list:
+    """The references this fixture sells **across the whole window**, best first.
+
+    **Published because S1's fixture reads it**, and the reason is S7: an
+    elasticity is fitted on *weeks*, so it can only exist where a price moved on
+    a reference that sold in many different weeks. Two fixtures choosing
+    independently produced thirty repriced references of which six sold at all,
+    and one estimable reference in four thousand -- a price history that
+    demonstrated a column and taught the next stage nothing.
+
+    The ranking is by how far back the reference has been on a shelf, then by
+    how many units it may sell: a row stocked a fortnight ago sells only in the
+    last fortnight, and S3 is the module that knows when that was.
+
+    Computed from S3's stock plan and this fixture's own rules, before either
+    has written a row, so asking disturbs no ordering between the two fixtures.
+    """
+    if profile in _SPREAD:
+        return _SPREAD[profile]
+    shape = _profile(profile)
+    if shape is None:
+        return []
+    shelves = _shelves(profile)
+    catalog = {
+        f"{row['name']}|{row['presentation']}": row
+        for row in catalog_demo.item_plan(profile)
+    }
+    reach: dict[str, tuple[int, int]] = {}
+    for shelf in shelves:
+        back, units = reach.get(shelf["item_key"], (0, 0))
+        reach[shelf["item_key"]] = (
+            max(back, int(shelf["earliest_back"])),
+            units + int(shelf["units"]),
+        )
+
+    # **Ranked by weeks first and pesos second**, because S7 needs both of them
+    # on the same reference and they pull in different directions. A regression
+    # counts weeks, so a reference has to be on a shelf long enough to sell in
+    # many of them; a suggestion has to clear a materiality floor stated in
+    # pesos, so it also has to be worth something. The span is bounded both by
+    # how long the row has been on a shelf and by how much of it there is -- a
+    # row sells at most a unit or two a day.
+    def rank(pair):
+        key, (back, units) = pair
+        price = float((catalog.get(key) or {}).get("price") or 0)
+        # A reference sells at most a unit or two a day, so its plausible span
+        # is bounded both by how long it has been on a shelf and by how much of
+        # it there is. Everything that can reach the estimator's floors at all
+        # comes first; inside that, the ones worth the most money.
+        reaches_the_floors = (
+            min(back // 7, units) >= WEEKS_A_FIT_NEEDS and units >= UNITS_A_FIT_NEEDS
+        )
+        # Inside that bucket, by **volume** rather than by revenue: the weekly
+        # counts a regression reads are unit counts, and an expensive reference
+        # selling two a week carries more noise in its own log than any price
+        # move could put there. Price still matters to the impact figure, and
+        # `units × price` was the first ranking tried -- it filled the window
+        # with expensive, thin references and every fit came back too wide to
+        # use.
+        return (not reaches_the_floors, -units, -price, key)
+
+    _SPREAD[profile] = [key for key, _reach in sorted(reach.items(), key=rank)]
+    return _SPREAD[profile]
 
 
 def _shelves(profile):
@@ -1009,6 +1118,33 @@ def _seller(world, location):
     return world.cashiers.get(location.id) or world.cashiers.get("owner")
 
 
+def _demand_answers(world, item, price, key) -> bool:
+    """Whether this line survives the price it was going to be sold at.
+
+    `q ∝ p^β` with `β < 0`, expressed as a probability of keeping the line and
+    normalised against the **lowest** price the reference carried in the window
+    -- so the factor is 1 at the bottom of its own price ladder and below 1
+    above it. Lines are only ever dropped, never added, which is what keeps
+    every shelf inside the headroom S3's plan left it.
+
+    A reference whose price never moved has no ladder and is left alone: there
+    is nothing for a demand curve to respond to, and thinning it would only make
+    the fixture sell less.
+    """
+    rows = [row for row in world.prices.get(item.id, []) if row.location_id is None]
+    if len(rows) < 2:
+        return True
+    floor = min(row.price for row in rows)
+    if floor <= 0 or price <= floor:
+        return True
+    beta = DEMAND_ELASTICITY[
+        stable_int("elasticity", f"{item.name}|{item.presentation}")
+        % len(DEMAND_ELASTICITY)
+    ]
+    keep = float(floor / price) ** float(abs(beta))
+    return stable_int("demand", key) % 10_000 < keep * 10_000
+
+
 def _price_on(world, item, location, day):
     """The price in force at this sede on the sale's own day.
 
@@ -1259,6 +1395,15 @@ def _build_line(context, ticket, line, sale, world, heads):
     if price is None:
         return None
     key = f"{ticket['key']}:{line['position']}"
+    # **A line a return points at is never dropped.** The returns are planned
+    # against `(ticket, position)` before any price is resolved, so thinning one
+    # away here would leave `sale_return_lines.sale_line_id` naming a row that
+    # was never written -- which Django's own constraint check catches at
+    # teardown and a pilot would catch as a refund against nothing.
+    returned = ticket["return"]
+    if not (returned and returned["sale_line_position"] == line["position"]):
+        if not _demand_answers(world, item, price, key):
+            return None
     unit_price = money.cents(price)
     row = SaleLine(
         id=context.uid("sale_lines", key),

@@ -63,3 +63,10 @@ from core.fiscal import demo as fiscal  # noqa: E402,F401  -- registers "fiscal"
 # they produced through the product's own service functions, because a regime
 # that appears only because a fixture set `basis` is a regime nobody has tested.
 from core.purchasing import demo as purchasing  # noqa: E402,F401  -- "purchasing"
+
+# S7's fixture: the margin goal, the caps, and the suggestions both engines
+# produce. **It writes no estimate and no proposal by hand** -- it runs
+# `pricing.run` exactly as the cron does and then resolves a subset through S1's
+# price editor, because `taken`, `modified` and `dismissed` are S1's writes and
+# a fixture that stamped them would model a write path that does not exist.
+from core.pricing import demo as pricing  # noqa: E402,F401  -- "pricing"

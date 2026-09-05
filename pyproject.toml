@@ -41,6 +41,7 @@ packages = [
     "core.management",
     "core.management.commands",
     "core.migrations",
+    "core.pricing",
     "core.purchasing",
     "core.sync",
 ]

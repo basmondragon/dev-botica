@@ -1060,6 +1060,42 @@
         ]
       }
     },
+    "/api/price-proposals/{proposal_id}/dismiss": {
+      "post": {
+        "operationId": "core_catalog_api_dismiss_price_proposal",
+        "summary": "Dismiss Price Proposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveProposalOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Decline a suggestion, **from the editor rather than from Precios**.\n\nIt lives on S1's router because the write is S1's: `taken`, `modified` and\n`dismissed` are the three states a person's decision reaches, and all three\nare stamped by the stage that carried the decision out. It is deliberately\n**not** under `/api/pricing/` -- every approve, apply, revert and dismiss\npath under that prefix returns 404, because a route standing behind a policy\nis a route somebody can re-enable.\n\nNo `item_prices` row is written, which is what makes a dismissal legible in\nthe measurement: a reference dismissed and then repriced by hand a fortnight\nlater meant *not now*, and one dismissed and left alone meant *wrong*.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
     "/api/item-prices/{price_id}": {
       "delete": {
         "operationId": "core_catalog_api_withdraw_price",
@@ -6404,6 +6440,554 @@
           }
         ]
       }
+    },
+    "/api/pricing/items": {
+      "get": {
+        "operationId": "core_pricing_api_list_pricing_items",
+        "summary": "List Pricing Items",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "manufacturer_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Manufacturer Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "live",
+                    "unevaluated",
+                    "no_proposal",
+                    "proposed",
+                    "above_cap",
+                    "taken",
+                    "modified",
+                    "dismissed",
+                    "superseded"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "margin_rule",
+                    "elasticity"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "confidence",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Confidence"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_PricingRow_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The Precios grid, one row per catalog item.\n\n**Every current figure is recomputed on this read** -- the price, the cost\nbasis and the cap -- which is what lets a suggestion be marked *stale* on\nscreen instead of a transaction refusing it later. `Estado · Con propuesta`\nis the default view; a reference with nothing to say is still in the grid,\nwith a badge distinguishing *nothing could evaluate this* from *both engines\nlooked and there is nothing to do*.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/items/{item_id}": {
+      "get": {
+        "operationId": "core_pricing_api_read_pricing_item",
+        "summary": "Read Pricing Item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "One reference: the estimate, the suggestion's arithmetic, the cap and its\nsource, the price history with each row's author, and **every past\nsuggestion beside what the person chose against it**.\n\nThat last block is the measurement in its single-reference form -- where an\nowner arguing with the model gets to check whether the model has been right\nbefore.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/summary": {
+      "get": {
+        "operationId": "core_pricing_api_pricing_summary",
+        "summary": "Pricing Summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingSummaryOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The four KPI tiles, the run's evaluated / estimable counts by reason, and\n**the suggestion count by `basis`** -- the one figure that answers *how much\nof this screen is evidence yet*.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/adoption": {
+      "get": {
+        "operationId": "core_pricing_api_pricing_adoption",
+        "summary": "Pricing Adoption",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "default": 90,
+              "title": "Days",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingAdoptionOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "How often suggestions are taken, taken with a different number, or\ndismissed -- **split by `basis` and never aggregated across it**.\n\nThe two engines make two different claims, and a blended adoption rate hides\nthe case this stage most needs to detect: an elasticity engine nobody\ntrusts, carried by a margin rule everybody uses.\n\n**What this cannot tell us**, stated so nobody reads more into it than it\nholds: it measures whether people agreed with the suggestions, not whether\nthe suggestions were right. A margin that rose and a customer who quietly\nwent elsewhere are both invisible here. The claim it supports is *the advice\nis being taken*; the claim it does not support is *the model made the\npharmacy money*, which is measured against `daily_metrics` on the references\nthat actually changed, joined through `proposal_id`, and only S9 computes it.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/runs": {
+      "get": {
+        "operationId": "core_pricing_api_list_runs",
+        "summary": "List Runs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 12,
+              "title": "Limit",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PricingRunOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run history and freshness, **derived from the rows the runs wrote**.\n\nThere is no run table: the ledger assigns S7 two tables and no more.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_pricing_api_enqueue_run",
+        "summary": "Enqueue Run",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingRunEnqueuedOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Enqueue a run now. Refused while one is in flight.\n\n**The most consequential write this stage exposes, and its whole consequence\nis that a screen changes.** *If restricting it to `owner` is wrong*, an\n`admin` who wants fresh figures asks somebody to press one button, which is\na friction worth one line of code to remove -- a much smaller question than\nthe one it replaces, and making it smaller is what A11 was for.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/caps": {
+      "get": {
+        "operationId": "core_pricing_api_list_caps",
+        "summary": "List Caps",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PricingCapOut"
+                  },
+                  "title": "Response",
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "description": "Loaded caps with their source reference and date.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/caps/import": {
+      "post": {
+        "operationId": "core_pricing_api_import_caps",
+        "summary": "Import Caps",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingCapImportOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Bulk-load caps from CSV. Synchronous, refused above 5.000 rows.\n\n**It writes no `imports` row**: the ledger gives that table to S1 and S6,\nso a cap load records an `audit_log` row instead.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PricingCapImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/caps/{item_id}": {
+      "put": {
+        "operationId": "core_pricing_api_set_cap",
+        "summary": "Set Cap",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "item_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingCapOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Set or clear one item's cap. **Writes no price and touches no\n`item_prices` row** (A11).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PricingCapIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/pricing": {
+      "get": {
+        "operationId": "core_pricing_api_read_pricing_settings",
+        "summary": "Read Pricing Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_pricing_api_write_pricing_settings",
+        "summary": "Write Pricing Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PricingSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "One `jsonb_set`, every other group untouched (rule 5).\n\nTurning `allow_raise_without_cap` on is an ordinary settings write behind\nthe ordinary permission dependency -- and it writes an `audit_log` row and\nputs a standing line on the Precios screen while it is on.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PricingSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/pricing/filters": {
+      "get": {
+        "operationId": "core_pricing_api_pricing_filters",
+        "summary": "Pricing Filters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "description": "`Laboratorio` and `Categoría`, restricted to references this screen shows.\n\nServed here rather than reused from S1's own lists because the chips are\nnarrowed to what the grid actually holds: a laboratorio with no priced\nreference in it is a chip that filters to an empty screen.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -7691,6 +8275,16 @@
             },
             "title": "Prices",
             "type": "array"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveProposalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -7727,9 +8321,57 @@
           "cap_status",
           "barcodes",
           "supplier_items",
-          "prices"
+          "prices",
+          "proposal"
         ],
         "title": "ItemDetail",
+        "type": "object"
+      },
+      "LiveProposalOut": {
+        "description": "The suggestion the price editor was opened against, if there is one.\n\n**S7 writes it and S1 reads it.** It is here so the field can render\n`sugerido $12.850` beside itself and offer `Descartar` -- the two things the\nPrecios screen deliberately does not do, because that screen has no write\npath to a suggestion's outcome at all.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "suggested_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Suggested Price",
+            "type": "string"
+          },
+          "current_price_at_proposal": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Price At Proposal",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "basis",
+          "status",
+          "suggested_price",
+          "current_price_at_proposal",
+          "confidence",
+          "reason"
+        ],
+        "title": "LiveProposalOut",
         "type": "object"
       },
       "PriceOut": {
@@ -16755,6 +17397,1397 @@
           }
         },
         "title": "PurchasingSettingsIn",
+        "type": "object"
+      },
+      "Page_PricingRow_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/PricingRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[PricingRow]",
+        "type": "object"
+      },
+      "PricingProposalOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "basis": {
+            "enum": [
+              "margin_rule",
+              "elasticity"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "suggested_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Suggested Price",
+            "type": "string"
+          },
+          "current_price_at_proposal": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Current Price At Proposal",
+            "type": "string"
+          },
+          "current_margin": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Margin"
+          },
+          "projected_margin": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Margin"
+          },
+          "estimated_monthly_impact": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Monthly Impact"
+          },
+          "trailing_monthly_units": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trailing Monthly Units"
+          },
+          "margin_gap_pp": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Gap Pp"
+          },
+          "step_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Step Pct",
+            "type": "string"
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "respects_regulated_cap": {
+            "title": "Respects Regulated Cap",
+            "type": "boolean"
+          },
+          "regulated_max_price_at_proposal": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Max Price At Proposal"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolved_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Price"
+          },
+          "resolved_by_name": {
+            "title": "Resolved By Name",
+            "type": "string"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "stale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingStaleOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "basis",
+          "status",
+          "suggested_price",
+          "current_price_at_proposal",
+          "current_margin",
+          "projected_margin",
+          "estimated_monthly_impact",
+          "trailing_monthly_units",
+          "margin_gap_pp",
+          "step_pct",
+          "confidence",
+          "respects_regulated_cap",
+          "regulated_max_price_at_proposal",
+          "reason_code",
+          "reason",
+          "resolved_price",
+          "resolved_by_name",
+          "resolved_at",
+          "computed_at",
+          "stale"
+        ],
+        "title": "PricingProposalOut",
+        "type": "object"
+      },
+      "PricingRow": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "manufacturer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manufacturer Name"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "cost_basis": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Basis"
+          },
+          "cost_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Source"
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price"
+          },
+          "current_margin": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Margin"
+          },
+          "margin_gap_pp": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Gap Pp"
+          },
+          "regulated_max_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Max Price"
+          },
+          "cap_status": {
+            "enum": [
+              "capped",
+              "not_regulated",
+              "unknown"
+            ],
+            "title": "Cap Status",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "unevaluated",
+              "no_proposal",
+              "proposed",
+              "above_cap",
+              "taken",
+              "modified",
+              "dismissed",
+              "superseded"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "enum": [
+                  "margin_rule",
+                  "elasticity"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "elasticity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elasticity"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingProposalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "item_id",
+          "name",
+          "presentation",
+          "manufacturer_name",
+          "category_name",
+          "unit",
+          "active",
+          "cost_basis",
+          "cost_source",
+          "current_price",
+          "current_margin",
+          "margin_gap_pp",
+          "regulated_max_price",
+          "cap_status",
+          "state",
+          "reason",
+          "basis",
+          "confidence",
+          "elasticity",
+          "observations",
+          "proposal"
+        ],
+        "title": "PricingRow",
+        "type": "object"
+      },
+      "PricingStaleOut": {
+        "description": "Why a suggestion's figures are no longer about the price on the shelf.\n\n**A rendering rule rather than a refusal.** A run computed on Monday is read\non Friday against a cost and a price that may both have moved, and\n`item_prices` is a table this stage no longer writes at all -- so the check\nmoved to where it always belonged: read time, on screen, before anybody\ntypes anything.",
+        "properties": {
+          "reason": {
+            "enum": [
+              "price_moved",
+              "cost_moved",
+              "cap_binds"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "detail"
+        ],
+        "title": "PricingStaleOut",
+        "type": "object"
+      },
+      "PricingDetail": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/PricingRow"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingEstimateOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PricingProposalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_estimates": {
+            "items": {
+              "$ref": "#/components/schemas/PricingLocationEstimate"
+            },
+            "title": "Location Estimates",
+            "type": "array"
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/PricingPriceRow"
+            },
+            "title": "Prices",
+            "type": "array"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/PricingProposalOut"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "cap_source": {
+            "title": "Cap Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "estimate",
+          "proposal",
+          "location_estimates",
+          "prices",
+          "history",
+          "cap_source"
+        ],
+        "title": "PricingDetail",
+        "type": "object"
+      },
+      "PricingEstimateOut": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "elasticity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elasticity"
+          },
+          "r2": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R2"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "distinct_prices": {
+            "title": "Distinct Prices",
+            "type": "integer"
+          },
+          "price_dispersion": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Dispersion"
+          },
+          "std_error": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Std Error"
+          },
+          "ci_low": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Low"
+          },
+          "ci_high": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci High"
+          },
+          "weeks_excluded_stockout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weeks Excluded Stockout"
+          },
+          "weeks_excluded_promo": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weeks Excluded Promo"
+          },
+          "imported_share": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Share"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "window": {
+            "title": "Window",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "elasticity",
+          "r2",
+          "observations",
+          "distinct_prices",
+          "price_dispersion",
+          "std_error",
+          "ci_low",
+          "ci_high",
+          "weeks_excluded_stockout",
+          "weeks_excluded_promo",
+          "imported_share",
+          "confidence",
+          "window",
+          "model_version",
+          "computed_at",
+          "reason"
+        ],
+        "title": "PricingEstimateOut",
+        "type": "object"
+      },
+      "PricingLocationEstimate": {
+        "description": "A per-sede fit, where that sede cleared every floor on its own. **It\nflags heterogeneity and never prices a sede differently**, which v1 cannot\nexpress: `price_proposals` carries no `location_id`.",
+        "properties": {
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "elasticity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elasticity"
+          },
+          "r2": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R2"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "location_name",
+          "elasticity",
+          "r2",
+          "observations",
+          "confidence",
+          "status",
+          "reason"
+        ],
+        "title": "PricingLocationEstimate",
+        "type": "object"
+      },
+      "PricingPriceRow": {
+        "description": "One row of the item's price history, as the panel renders it.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "set_by_name": {
+            "title": "Set By Name",
+            "type": "string"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          }
+        },
+        "required": [
+          "id",
+          "price",
+          "effective_from",
+          "effective_to",
+          "source",
+          "location_name",
+          "set_by_name",
+          "proposal_id"
+        ],
+        "title": "PricingPriceRow",
+        "type": "object"
+      },
+      "PricingSummaryOut": {
+        "description": "The four KPI tiles, plus the one figure that answers *how much of this\nscreen is evidence yet*.",
+        "properties": {
+          "references_with_proposal": {
+            "title": "References With Proposal",
+            "type": "integer"
+          },
+          "estimated_monthly_impact": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Estimated Monthly Impact",
+            "type": "string"
+          },
+          "projected_margin": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projected Margin"
+          },
+          "current_margin": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Margin"
+          },
+          "margin_goal_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Goal Pct"
+          },
+          "above_cap": {
+            "title": "Above Cap",
+            "type": "integer"
+          },
+          "evaluated": {
+            "title": "Evaluated",
+            "type": "integer"
+          },
+          "estimable": {
+            "title": "Estimable",
+            "type": "integer"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "by_reason": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Reason",
+            "type": "object"
+          },
+          "by_basis": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Basis",
+            "type": "object"
+          },
+          "computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Computed At"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "window": {
+            "title": "Window",
+            "type": "string"
+          },
+          "allow_raise_without_cap": {
+            "title": "Allow Raise Without Cap",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "references_with_proposal",
+          "estimated_monthly_impact",
+          "projected_margin",
+          "current_margin",
+          "margin_goal_pct",
+          "above_cap",
+          "evaluated",
+          "estimable",
+          "by_status",
+          "by_reason",
+          "by_basis",
+          "computed_at",
+          "model_version",
+          "window",
+          "allow_raise_without_cap"
+        ],
+        "title": "PricingSummaryOut",
+        "type": "object"
+      },
+      "PricingAdoptionBasisOut": {
+        "properties": {
+          "basis": {
+            "enum": [
+              "margin_rule",
+              "elasticity"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "taken": {
+            "title": "Taken",
+            "type": "integer"
+          },
+          "modified": {
+            "title": "Modified",
+            "type": "integer"
+          },
+          "dismissed": {
+            "title": "Dismissed",
+            "type": "integer"
+          },
+          "superseded": {
+            "title": "Superseded",
+            "type": "integer"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "proposed_ever": {
+            "title": "Proposed Ever",
+            "type": "integer"
+          },
+          "median_signed_gap_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Signed Gap Pct"
+          },
+          "dismissed_then_repriced": {
+            "title": "Dismissed Then Repriced",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "basis",
+          "taken",
+          "modified",
+          "dismissed",
+          "superseded",
+          "resolved",
+          "proposed_ever",
+          "median_signed_gap_pct",
+          "dismissed_then_repriced"
+        ],
+        "title": "PricingAdoptionBasisOut",
+        "type": "object"
+      },
+      "PricingAdoptionOut": {
+        "properties": {
+          "since": {
+            "format": "date",
+            "title": "Since",
+            "type": "string"
+          },
+          "until": {
+            "format": "date",
+            "title": "Until",
+            "type": "string"
+          },
+          "by_basis": {
+            "items": {
+              "$ref": "#/components/schemas/PricingAdoptionBasisOut"
+            },
+            "title": "By Basis",
+            "type": "array"
+          }
+        },
+        "required": [
+          "since",
+          "until",
+          "by_basis"
+        ],
+        "title": "PricingAdoptionOut",
+        "type": "object"
+      },
+      "PricingRunOut": {
+        "properties": {
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "estimates": {
+            "title": "Estimates",
+            "type": "integer"
+          },
+          "proposals": {
+            "title": "Proposals",
+            "type": "integer"
+          },
+          "by_basis": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Basis",
+            "type": "object"
+          }
+        },
+        "required": [
+          "computed_at",
+          "model_version",
+          "estimates",
+          "proposals",
+          "by_basis"
+        ],
+        "title": "PricingRunOut",
+        "type": "object"
+      },
+      "PricingRunEnqueuedOut": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queued",
+          "detail"
+        ],
+        "title": "PricingRunEnqueuedOut",
+        "type": "object"
+      },
+      "PricingCapOut": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "presentation": {
+            "title": "Presentation",
+            "type": "string"
+          },
+          "regulated_max_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Max Price"
+          },
+          "cap_status": {
+            "enum": [
+              "capped",
+              "not_regulated",
+              "unknown"
+            ],
+            "title": "Cap Status",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "set_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set At"
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price"
+          },
+          "above_cap": {
+            "title": "Above Cap",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item_id",
+          "name",
+          "presentation",
+          "regulated_max_price",
+          "cap_status",
+          "source",
+          "set_at",
+          "current_price",
+          "above_cap"
+        ],
+        "title": "PricingCapOut",
+        "type": "object"
+      },
+      "PricingCapImportOut": {
+        "properties": {
+          "loaded": {
+            "title": "Loaded",
+            "type": "integer"
+          },
+          "unmatched": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Unmatched",
+            "type": "array"
+          },
+          "refused": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Refused",
+            "type": "array"
+          }
+        },
+        "required": [
+          "loaded",
+          "unmatched",
+          "refused"
+        ],
+        "title": "PricingCapImportOut",
+        "type": "object"
+      },
+      "PricingCapImportIn": {
+        "properties": {
+          "csv": {
+            "title": "Csv",
+            "type": "string"
+          }
+        },
+        "required": [
+          "csv"
+        ],
+        "title": "PricingCapImportIn",
+        "type": "object"
+      },
+      "PricingCapIn": {
+        "properties": {
+          "regulated_max_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regulated Max Price"
+          },
+          "cap_status": {
+            "enum": [
+              "capped",
+              "not_regulated",
+              "unknown"
+            ],
+            "title": "Cap Status",
+            "type": "string"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cap_status"
+        ],
+        "title": "PricingCapIn",
+        "type": "object"
+      },
+      "PricingSettingsOut": {
+        "properties": {
+          "margin_goal_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Goal Pct"
+          },
+          "max_single_step_pct": {
+            "title": "Max Single Step Pct",
+            "type": "number"
+          },
+          "allow_raise_without_cap": {
+            "title": "Allow Raise Without Cap",
+            "type": "boolean"
+          },
+          "min_days_between_changes": {
+            "title": "Min Days Between Changes",
+            "type": "integer"
+          },
+          "rounding_unit": {
+            "title": "Rounding Unit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "margin_goal_pct",
+          "max_single_step_pct",
+          "allow_raise_without_cap",
+          "min_days_between_changes",
+          "rounding_unit"
+        ],
+        "title": "PricingSettingsOut",
+        "type": "object"
+      },
+      "PricingSettingsIn": {
+        "properties": {
+          "margin_goal_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Goal Pct"
+          },
+          "max_single_step_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Single Step Pct"
+          },
+          "allow_raise_without_cap": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Raise Without Cap"
+          },
+          "min_days_between_changes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Days Between Changes"
+          },
+          "rounding_unit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rounding Unit"
+          },
+          "clear_margin_goal": {
+            "default": false,
+            "title": "Clear Margin Goal",
+            "type": "boolean"
+          }
+        },
+        "title": "PricingSettingsIn",
         "type": "object"
       }
     },

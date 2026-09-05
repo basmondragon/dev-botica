@@ -49,6 +49,11 @@ export interface CatalogSearch {
   order?: "asc" | "desc";
   /** The open record panel, so a row is a link. `nuevo` is the empty panel. */
   item?: string;
+  /** The S7 suggestion this editor was opened against, and the figure it
+   *  proposes. Both come from the URL, because the Precios row action is a
+   *  navigation and not a write. */
+  proposal?: string;
+  sugerido?: string;
   settings?: string;
 }
 
@@ -529,7 +534,11 @@ export function CatalogPage({
             creating={openId === "nuevo"}
             me={me}
             locations={locations.data ?? []}
-            onClose={() => go({ item: undefined })}
+            proposalId={search.proposal}
+            suggestedPrice={search.sugerido}
+            onClose={() =>
+              go({ item: undefined, proposal: undefined, sugerido: undefined })
+            }
             onCreated={(id) => go({ item: id })}
           />
         ) : null}

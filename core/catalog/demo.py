@@ -72,7 +72,7 @@ PROFILES = {
         "reserved_customers": True,
         "customers": 40,
         "window_days": 180,
-        "repriced": 30,
+        "repriced": 150,
         "overrides_per_location": 2,
         "future_price": True,
     },
@@ -84,7 +84,7 @@ PROFILES = {
         "reserved_customers": True,
         "customers": 40,
         "window_days": 12,
-        "repriced": 30,
+        "repriced": 150,
         "overrides_per_location": 2,
         "future_price": True,
     },
@@ -111,7 +111,7 @@ PROFILES = {
         "reserved_customers": True,
         "customers": 40,
         "window_days": 180,
-        "repriced": 30,
+        "repriced": 150,
         "overrides_per_location": 2,
         "future_price": True,
     },
@@ -817,7 +817,7 @@ def _write_prices(context, items, shape):
 
     # Only references whose figure no screen draws.
     movable = [pair for pair in items if not pair[0]["fixed_price"]]
-    repriced = {_item_key(entry) for entry, _item in movable[: shape["repriced"]]}
+    repriced = set(repriced_keys(context.profile))
     future_key = _item_key(movable[0][0]) if shape["future_price"] and movable else None
 
     rows = []
@@ -830,7 +830,7 @@ def _write_prices(context, items, shape):
             steps = 2 + seed % 2
             for step in range(1, steps + 1):
                 day = today - timedelta(days=max(1, window * (steps - step + 1) // 4))
-                factor = Decimal(104 + (seed // (step + 1)) % 13) / Decimal(100)
+                factor = Decimal(92 + (seed // (step + 1)) % 39) / Decimal(100)
                 moves.append((day, _shelf(opening * factor)))
         if key == future_key:
             moves.append((today + timedelta(days=7), _shelf(opening * Decimal("1.05"))))
@@ -902,6 +902,53 @@ def _write_prices(context, items, shape):
     for row in rows:
         unique.setdefault(row.id, row)
     _insert(context, ItemPrice, list(unique.values()), "item_prices")
+
+
+#: Kept, because the planner behind it is heavy and it is a pure function of
+#: the profile.
+_REPRICED: dict[str, list] = {}
+
+
+def repriced_keys(profile):
+    """Which references carry a price history, and **why these ones**.
+
+    A repricing exists in this seed so that a price *history* is visible -- and
+    S7's estimator is the reader that turns it into something more: an
+    elasticity can only be fitted where a price moved **on a reference somebody
+    actually bought**, because the regression's observations are weeks of sales
+    and no amount of waiting adds variation to a reference nobody buys.
+
+    So the set is drawn from the **cheap end** of the movable catalog, which is
+    where a droguería's rotation is, and it is the same end S4's fixture draws
+    its movers from. That is the whole of the coupling and it is deliberate: two
+    fixtures choosing independently produced thirty repriced references of which
+    six sold at all, and one estimable reference in four thousand -- a price
+    history that demonstrated a column and taught the next stage nothing.
+
+    Pure, and computed from the plan rather than from the database, so S4's own
+    planner can read it before either fixture has written a row.
+    """
+    if profile in _REPRICED:
+        return _REPRICED[profile]
+    shape = PROFILES[profile]
+    if not shape["repriced"]:
+        return []
+    # A function-level import, and the one place this fixture reads a later
+    # stage's planner. It is here rather than at module scope because
+    # `core.demo` imports this module first, and it is a **planner** rather than
+    # a table: `mover_keys` is computed from S3's stock plan and S4's own rules
+    # without touching the database, so asking disturbs no ordering between the
+    # fixtures.
+    from core.counter.demo import spread_keys
+
+    movable = {
+        _item_key(row): row for row in item_plan(profile) if not row["fixed_price"]
+    }
+    # The references S4 sells across the whole window, minus the handful whose
+    # figure a screen draws -- those four are the ones no repricing may move.
+    spread = [key for key in spread_keys(profile) if key in movable]
+    _REPRICED[profile] = spread[: shape["repriced"]]
+    return _REPRICED[profile]
 
 
 def _shelf(amount):

@@ -22,7 +22,15 @@ from django.utils import timezone
 from ninja.errors import HttpError
 
 from core import audit
-from core.models import AuditAction, Item, ItemPrice, PriceSource
+from core.models import (
+    AuditAction,
+    Item,
+    ItemPrice,
+    LIVE_PROPOSAL_STATUSES,
+    PriceProposal,
+    PriceProposalStatus,
+    PriceSource,
+)
 
 
 #: Every price is stored to the centavo, because a box of 30 at $12.000 divides
@@ -399,3 +407,106 @@ def history(item: Item, *, day: date | None = None):
         and (row.effective_to is None or row.effective_to > day)
     }
     return rows, current
+
+
+# ---------------------------------------------------------------------------
+# The resolution — S1's half of A11
+# ---------------------------------------------------------------------------
+
+
+def live_proposal(item):
+    """The suggestion this item currently carries, or `None`.
+
+    S7 writes it and S1 reads it, which is the whole of the traffic between the
+    two stages in this direction: the editor renders the suggested figure beside
+    its own field, and the save below stamps what the person actually chose.
+    """
+    return (
+        PriceProposal.objects.filter(item=item, status__in=LIVE_PROPOSAL_STATUSES)
+        .order_by("-computed_at")
+        .first()
+    )
+
+
+def take_proposal(*, proposal, actor, price):
+    """Stamp a suggestion with what the person chose. **S1's write, not S7's.**
+
+    `taken` when the price saved is exactly the number suggested and `modified`
+    when it is not -- and **`suggested_price` does not move either way**. The
+    gap between the two columns is the only honest measure this product will
+    ever have of whether the pricing model is trusted, and a build that moved
+    `suggested_price` to match the decision would destroy it permanently, with
+    nothing to recover it from.
+
+    An `above_cap` suggestion is never resolved through here, because the screen
+    that shows it carries no action at all: the till is charging above a legal
+    ceiling and that is a compliance finding, not a suggestion somebody takes.
+    """
+    chosen = Decimal(price).quantize(CENTAVO)
+    proposal.status = (
+        PriceProposalStatus.TAKEN
+        if chosen == Decimal(proposal.suggested_price)
+        else PriceProposalStatus.MODIFIED
+    )
+    proposal.resolved_price = chosen
+    proposal.resolved_by = actor if getattr(actor, "id", None) else None
+    # Stamped, not joined: S0's referential rule again, and `Tomada el 22/08 por
+    # Marcela Ríos` is a line the Precios grid renders from this column.
+    proposal.resolved_by_name = getattr(actor, "name", "") or ""
+    proposal.resolved_at = timezone.now()
+    proposal.save(
+        update_fields=[
+            "status",
+            "resolved_price",
+            "resolved_by",
+            "resolved_by_name",
+            "resolved_at",
+            "updated_at",
+        ]
+    )
+    return proposal
+
+
+def dismiss_proposal(*, proposal, actor, tenant_id, request_id=""):
+    """Decline a suggestion. **No `item_prices` row is written.**
+
+    Somebody who wants to dismiss a suggestion does it where they would have
+    acted on it -- in the price editor -- which costs one extra click and buys
+    the property that the Precios screen has no write path to a suggestion's
+    outcome at all.
+
+    A dismissal is an owner using their judgement, and the grid colours it
+    neutral for exactly that reason. It is also the signal that says the model
+    is wrong about a reference, so it is recorded rather than silently dropped:
+    the share of dismissals whose reference was repriced by hand anyway inside
+    the following month is what tells *wrong* from *not now*.
+    """
+    proposal.status = PriceProposalStatus.DISMISSED
+    proposal.resolved_price = None
+    proposal.resolved_by = actor if getattr(actor, "id", None) else None
+    proposal.resolved_by_name = getattr(actor, "name", "") or ""
+    proposal.resolved_at = timezone.now()
+    proposal.save(
+        update_fields=[
+            "status",
+            "resolved_price",
+            "resolved_by",
+            "resolved_by_name",
+            "resolved_at",
+            "updated_at",
+        ]
+    )
+    audit.record(
+        actor=actor,
+        tenant_id=tenant_id,
+        action=AuditAction.REJECT,
+        entity_type="price_proposals",
+        entity_id=proposal.id,
+        before={"status": PriceProposalStatus.PROPOSED},
+        after={
+            "status": PriceProposalStatus.DISMISSED,
+            "suggested_price": str(proposal.suggested_price),
+        },
+        request_id=request_id,
+    )
+    return proposal

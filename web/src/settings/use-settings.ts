@@ -6,6 +6,7 @@ import {
   MonitorSmartphone,
   ScrollText,
   ShoppingCart,
+  Tag,
   Truck,
   UserRound,
   Users,
@@ -104,6 +105,18 @@ export const SETTINGS: SettingsSection[] = [
     label: "Compras",
     group: "Operación",
     icon: ShoppingCart,
+    roles: OFFICE,
+  },
+  {
+    // §B.8.4·4 · **Operación**, and S7's is the group's third section. It hosts
+    // the five settings keys **and the loaded caps**, because `Precios y topes`
+    // is the place a regente looking for a cap will look, and because the
+    // Precios header slot that might otherwise have held them is not a settings
+    // surface.
+    id: "pricing",
+    label: "Precios y topes",
+    group: "Operación",
+    icon: Tag,
     roles: OFFICE,
   },
   {
