@@ -182,6 +182,34 @@ for (const file of walk(SRC)) {
   });
 }
 
+/**
+ * A8 · **the advisory notice ships inside one component and comes from no prop,
+ * no setting, no role and no payload.**
+ *
+ * The grep is the gate: a sentence that appeared in a vocabulary module, a
+ * fixture or an API response would be a sentence a deployment could empty, and
+ * the whole point of A8 is that there is nowhere to put that flag. Zero
+ * occurrences means the notice has been lost; two means it has become content.
+ */
+const NOTICE =
+  "Con fiebre de más de dos días, remitir a consulta médica. Botica no";
+const carriers = [];
+for (const file of walk(SRC)) {
+  const path = relative(ROOT, file);
+  if (SKIP_FILES.has(path)) continue;
+  const source = readFileSync(file, "utf8");
+  // Newlines and indentation sit inside the JSX text node, so the sentence is
+  // matched on its words rather than on its whitespace.
+  if (source.replace(/\s+/g, " ").includes(NOTICE)) carriers.push(path);
+}
+if (carriers.length !== 1) {
+  failures += 1;
+  console.error(
+    `the advisory notice must live in exactly one component (A8); found ${carriers.length}` +
+      (carriers.length ? `: ${carriers.join(", ")}` : ""),
+  );
+}
+
 /** The token layer itself has to carry what the rules assume. */
 const REQUIRED_TOKENS = [
   "--radius-control: 9px",

@@ -42,11 +42,15 @@ from django.db.models import Q
 from django.utils import timezone
 
 from core.models import (
+    AssistantQuery,
+    AssistantSuggestion,
     Category,
+    CrossSellRule,
     Customer,
     Item,
     ItemBarcode,
     ItemPrice,
+    ItemWarning,
     Lot,
     Manufacturer,
     Payment,
@@ -73,7 +77,13 @@ from core.models import (
 #: `shifts`, `sales`, `sale_lines`, `payments`, `sale_returns` and
 #: `sale_return_lines`. They are the first collections in the registry that go
 #: both ways, which is what an offline till selling actually is.
-REGISTRY_VERSION = 3
+#:
+#: **4 · S8's amendment** (rule 9, A8): `cross_sell_rules` and `item_warnings`
+#: down to the till under a per-location cap, and `assistant_queries` and
+#: `assistant_suggestions` up through the outbox. The safety layer reaching the
+#: device is what makes the offline assistant filter on something rather than
+#: looking exactly as if it does.
+REGISTRY_VERSION = 4
 
 TENANT_WIDE = "tenant"
 LOCATION_SCOPED = "location"
@@ -617,6 +627,14 @@ POLICIES = Collection(
     member=lambda record, options: True,
     document=lambda record: {
         **_head(record),
+        # **The discriminator, and it is stamped rather than guessed.** S8's two
+        # reference collections share this store on the device -- RxDB's
+        # open-core build opens thirteen and the outbox is the thirteenth -- so
+        # each stream's rows are told apart by a `kind` the server writes, which
+        # is the same mechanism S4's five shared documents already use. A
+        # heuristic over which fields are present would delete the wrong rows on
+        # a reset and leave the till sitting on a hole until the next digest.
+        "kind": "policy",
         "item_id": _uuid(record["item_id"]),
         "location_id": _uuid(record["location_id"]),
         "min_quantity": record["min_quantity"],
@@ -1063,7 +1081,199 @@ COUNT_LINES = Collection(
 )
 
 
-#: **Version 3.** Ordered as a first sync should run: the catalog before the
+# ---------------------------------------------------------------------------
+# S8's amendment · two collections the till reads, two it only writes
+#
+# **The safety layer and the mined rules go down to the till, and the offers and
+# acceptances come up** (rule 9, A8). That is the whole of what makes the
+# assistant work with the fibre cut: the filter runs against `item_warnings`
+# that are already on the device, the `Se lleva junto` card is a
+# `cross_sell_rules` row that is already on the device, and the offer rows are
+# written locally and queued.
+#
+# **`item_warnings` is never the lever on the disk budget.** S2 measures under
+# 12 MB for a first sync and S3, S4 and S8 all draw on that ceiling; if the
+# total is over, `cross_sell_rules_per_item` is a setting and degrades the
+# breadth of `bought_together` suggestions. A blackout must remove the network,
+# not the safety layer (A8, ledger disputed columns).
+# ---------------------------------------------------------------------------
+
+
+def _rule_scope(*, tenant_id, location_id, options):
+    """This sede's rules and the network-wide ones, and no other sede's.
+
+    The same two-branch shape `item_prices` takes, and for the same reason:
+    `pull.py` runs the tuple scan once per branch so both stay on
+    `(tenant_id, location_id, updated_at, id)` rather than forcing a bitmap
+    union that loses the ordering the cursor needs.
+    """
+    del options
+    return Q(tenant_id=tenant_id) & (
+        Q(location_id=location_id) | Q(location_id__isnull=True)
+    )
+
+
+def _borrowed(options, key) -> int:
+    """One of the two `assistant` keys this file's membership rule reads.
+
+    `sync_settings.options()` copies them in beside S2's own group, and that is
+    the map every request-path caller passes. A caller holding only S2's group
+    -- a job, a check, a test reaching for `sync_settings.DEFAULTS` -- gets the
+    same answer here rather than a `KeyError` from inside a predicate, because
+    the floor a rule has to clear is a number this stage publishes a default
+    for, not something the sync group is entitled to be missing.
+    """
+    from core.assistant import settings as assistant_settings
+
+    return int(options.get(key, assistant_settings.DEFAULTS[key]))
+
+
+def _rule_member(record, options) -> bool:
+    """**The cap is enforced by the job that writes the rows, not here.**
+
+    This predicate is the registry's own floor -- a rule below the support floor
+    or outside the per-anchor cap is not a rule a till should be carrying -- and
+    it is evaluated over the returned page rather than in the scan, exactly as
+    every other membership rule in this file is.
+    """
+    return record["support"] >= _borrowed(options, "cross_sell_min_support") and record[
+        "rank"
+    ] <= _borrowed(options, "cross_sell_rules_per_item")
+
+
+def _rule_member_q(options):
+    return Q(support__gte=_borrowed(options, "cross_sell_min_support")) & Q(
+        rank__lte=_borrowed(options, "cross_sell_rules_per_item")
+    )
+
+
+CROSS_SELL_RULES = Collection(
+    name="cross_sell_rules",
+    model=CrossSellRule,
+    scope=LOCATION_SCOPED,
+    push=False,
+    natural_key=None,
+    #: The pilot's own sizing: roughly 1.600 items clear the support floor at
+    #: four rules each, per scope. **Not the seed's** -- the demo catalog is
+    #: smaller and a check asserting this against a seeded tenant fails on every
+    #: run.
+    rows_per_location=6400,
+    bytes_per_location=800_000,
+    fields=(
+        "id",
+        "updated_at",
+        "location_id",
+        "item_a_id",
+        "item_b_id",
+        "support",
+        "confidence",
+        "lift",
+        "rank",
+        "confidence_band",
+        "computed_at",
+    ),
+    scope_q=_rule_scope,
+    member_q=_rule_member_q,
+    member=_rule_member,
+    document=lambda record: {
+        **_head(record),
+        "kind": "rule",
+        "location_id": _uuid(record["location_id"]),
+        "item_id": _uuid(record["item_a_id"]),
+        "item_b_id": _uuid(record["item_b_id"]),
+        "support": record["support"],
+        "confidence": _decimal(record["confidence"]),
+        "lift": _decimal(record["lift"]),
+        "rank": record["rank"],
+        # **The one of the three provenance columns the device actually reads**,
+        # because it selects which form of the `bought_together_location` reason
+        # line renders. `basis` and `ticket_count` are Ajustes' and Ajustes is
+        # online-only, so neither crosses the wire.
+        "confidence_band": record["confidence_band"],
+        # **The one staleness figure this stage puts on a till.** The mined
+        # rules can be a week old and the percentage inside a `Se lleva junto`
+        # reason is a figure from that run, so the sync panel states their
+        # freshness **once** -- `Reglas del asistente · hace 3 días` -- exactly
+        # as §B.9.2 states the price list's freshness once rather than on every
+        # ticket line. Forty dots on a counter screen is the alarm fatigue that
+        # convention exists to prevent.
+        "computed_at": _iso(record["computed_at"]),
+    },
+)
+
+ITEM_WARNINGS = Collection(
+    name="item_warnings",
+    model=ItemWarning,
+    scope=TENANT_WIDE,
+    push=False,
+    natural_key=None,
+    rows_per_location=900,
+    bytes_per_location=270_000,
+    fields=(
+        "id",
+        "updated_at",
+        "item_id",
+        "type",
+        "text",
+        "severity",
+        "triggers",
+        "active",
+    ),
+    scope_q=_tenant_scope,
+    member_q=lambda options: Q(active=True),
+    # A deactivated warning is served **with a deletion marker** and leaves every
+    # till within one pull interval, which is why this stage hard-deletes
+    # nothing (S2, criterion 14).
+    member=lambda record, options: bool(record["active"]),
+    document=lambda record: {
+        **_head(record),
+        "kind": "warning",
+        "item_id": _uuid(record["item_id"]),
+        "type": record["type"],
+        "text": record["text"],
+        "severity": record["severity"],
+        "triggers": record["triggers"],
+    },
+)
+
+ASSISTANT_QUERIES = Collection(
+    name="assistant_queries",
+    model=AssistantQuery,
+    scope=LOCATION_SCOPED,
+    push=True,
+    pull=False,
+    # Rule 8's first form on the row, and S4's second form on the wire: the
+    # envelope key identifies the **event** -- the offer, the attach, the
+    # supersede -- and the payload's `client_uuid` identifies the row they all
+    # converge on.
+    natural_key=None,
+    rows_per_location=0,
+    bytes_per_location=0,
+    fields=("id", "updated_at"),
+    scope_q=_never,
+    member_q=lambda options: Q(),
+    member=lambda record, options: False,
+    document=lambda record: _head(record),
+)
+
+ASSISTANT_SUGGESTIONS = Collection(
+    name="assistant_suggestions",
+    model=AssistantSuggestion,
+    scope=LOCATION_SCOPED,
+    push=True,
+    pull=False,
+    natural_key=None,
+    rows_per_location=0,
+    bytes_per_location=0,
+    fields=("id", "updated_at"),
+    scope_q=_never,
+    member_q=lambda options: Q(),
+    member=lambda record, options: False,
+    document=lambda record: _head(record),
+)
+
+
+#: **Version 4.** Ordered as a first sync should run: the catalog before the
 #: prices that reference it, the lots before the stock that references them, and
 #: S4's six last of all -- the shift before the sales that sit in it, the sale
 #: before its lines and its payments, the return before its lines -- so a
@@ -1086,13 +1296,23 @@ COLLECTIONS: tuple[Collection, ...] = (
     PAYMENTS,
     SALE_RETURNS,
     SALE_RETURN_LINES,
+    # S8's two, after the items and the sedes' stock they are about: a warning
+    # with no product behind it filters nothing, and a rule naming two items the
+    # till does not hold yet ranks nothing.
+    CROSS_SELL_RULES,
+    ITEM_WARNINGS,
 )
 
 #: Collections a device only ever writes. They are **not** in `COLLECTIONS`,
 #: which is what keeps them out of the digest, out of the first-sync card's
 #: totals and out of the pull -- each of those three asks a question about a
 #: snapshot, and an event log is not one.
-PUSH_ONLY: tuple[Collection, ...] = (RECEIPT_LINES, COUNT_LINES)
+PUSH_ONLY: tuple[Collection, ...] = (
+    RECEIPT_LINES,
+    COUNT_LINES,
+    ASSISTANT_QUERIES,
+    ASSISTANT_SUGGESTIONS,
+)
 
 BY_NAME: dict[str, Collection] = {one.name: one for one in (*COLLECTIONS, *PUSH_ONLY)}
 

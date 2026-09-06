@@ -998,6 +998,31 @@ from core.pricing.api import router as pricing_router  # noqa: E402
 api.add_router("", pricing_router)
 
 
+# ---------------------------------------------------------------------------
+# S8 · the assistant
+#
+# The same rule again: a Router, not a second schema. Its paths already read
+# `/assistant/...`, `/item-warnings`, `/cross-sell-rules` and
+# `/settings/assistant`, so the prefix is empty here too.
+#
+# Importing `core.assistant.api` pulls in the package, which registers this
+# stage's two push writers with S2's endpoint -- so an offer written during a
+# blackout and the acceptance queued behind it go through this stage's own
+# service and not around it.
+#
+# **Not one route on this router puts a product on a card.** The chips, the
+# filter, the ranking and the type derivation all run on the device before
+# `POST /api/assistant/queries` is called, which is what makes them identical
+# online and offline (A8) -- and the one thing this router adds, the
+# recommendation's prose, is checked on the way out and discarded rather than
+# rendered when it fails.
+# ---------------------------------------------------------------------------
+
+from core.assistant.api import router as assistant_router  # noqa: E402
+
+api.add_router("", assistant_router)
+
+
 @api.exception_handler(LineRefused)
 def _line_refused(request, exc):
     """One refused line of a multi-line entry, at field scope (§B.10.3).

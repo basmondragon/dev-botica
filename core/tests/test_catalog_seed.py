@@ -133,10 +133,14 @@ def test_every_seeded_opening_price_is_imported_and_carries_no_author():
     administrator's id, because a repricing is a person's act."""
     tenant_id = seed("default")
     rows = ItemPrice.objects.filter(tenant_id=tenant_id)
-    assert rows.filter(proposal_id__isnull=False).count() == 0
     imported = rows.filter(source="imported")
     assert imported.count() == CATALOG_SIZE
     assert imported.filter(set_by_user__isnull=False).count() == 0
+    # An opening price answers no suggestion, because it precedes every run that
+    # could have made one. The stamp is scoped to `imported` rather than to the
+    # whole table: since S7, a repricing a person took from a proposal carries
+    # that proposal's id, which is the column doing exactly its job.
+    assert imported.filter(proposal_id__isnull=False).count() == 0
     manual = rows.filter(source="manual")
     assert manual.count() > 0
     assert manual.filter(set_by_user__isnull=True).count() == 0

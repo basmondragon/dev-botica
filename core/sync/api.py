@@ -68,7 +68,9 @@ def _tenant(request):
 
 
 def _options(request):
-    return sync_settings.read(_tenant(request))
+    """Every registry predicate's inputs -- S2's own group plus the two keys S8
+    owns that `cross_sell_rules`' membership rule reads."""
+    return sync_settings.options(_tenant(request))
 
 
 # ---------------------------------------------------------------------------

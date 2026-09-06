@@ -13,6 +13,8 @@ dialog appears** (§10).
 
 from decimal import Decimal
 
+import uuid
+
 import pytest
 from django.core import mail as django_mail
 from django.utils import timezone
@@ -120,23 +122,59 @@ def test_the_stages_own_switch_suppresses_the_call(tenant_a, sede_a, settings):
     )
 
 
-def test_the_assistants_kill_switch_stops_the_call_too(tenant_a, settings):
+def test_the_assistants_kill_switch_stops_the_call_too(tenant_a, sede_a, settings):
     """S8's `assistant` group holds the shared kill switch and the per-tenant
-    spend cap; either being off suppresses the call. **An unwritten group is not
-    an off switch** -- S6 and S8 land in parallel."""
+    spend cap; either being off suppresses the call.
+
+    **The switch is `model_enabled` and not `enabled`** -- S8 landed and settled
+    which of its two booleans this is: `enabled` removes the assistant column
+    from Mostrador and says nothing about whether a vendor may be called. It
+    ships **off**, because §11.3 is unanswered and a *no* costs no code.
+
+    The cap is now a read over the month's own `assistant_queries.cost_usd`
+    rather than a figure somebody has to keep up to date, which is what makes it
+    one cap rather than two.
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from core.assistant import settings as assistant_settings
+    from core.models import AssistantMode, AssistantQuery
+
     settings.BOTICA_GATEWAY_BASE_URL = "https://example.invalid/v1"
     settings.BOTICA_GATEWAY_API_KEY = "not-a-real-key"
     with pin_tenant(tenant_a.id):
         tenant = Tenant.objects.get(id=tenant_a.id)
+        assert gateway.enabled_for(tenant) is False
+
+        assistant_settings.write(
+            tenant, {"model_enabled": True, "monthly_spend_cap_usd": 1.0}
+        )
+        tenant.refresh_from_db()
         assert gateway.enabled_for(tenant) is True
 
-        tenant.settings = {"assistant": {"enabled": False}}
+        # The column switch is a different switch, and it does not gate this.
+        assistant_settings.write(tenant, {"enabled": False})
+        tenant.refresh_from_db()
+        assert gateway.enabled_for(tenant) is True
+
+        AssistantQuery.objects.create(
+            tenant=tenant_a,
+            location=sede_a,
+            client_uuid=uuid.uuid4(),
+            mode=AssistantMode.MODEL,
+            cost_usd=Decimal("1.20"),
+            occurred_at=timezone.now(),
+            recorded_at=timezone.now(),
+        )
+        tenant.refresh_from_db()
         assert gateway.enabled_for(tenant) is False
 
-        tenant.settings = {
-            "assistant": {"monthly_spend_cap_usd": 10, "spend_this_month_usd": 12}
-        }
-        assert gateway.enabled_for(tenant) is False
+        # Last month's spend is last month's.
+        AssistantQuery.objects.update(recorded_at=timezone.now() - timedelta(days=60))
+        assert gateway.enabled_for(tenant) is True
 
 
 def test_only_learned_lines_are_ever_sent_to_the_model(tenant_a, sede_a):

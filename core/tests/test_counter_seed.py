@@ -176,8 +176,23 @@ def test_the_seeded_sales_moved_stock_through_the_ledger_service():
 
         # **`from_suggestion` is created empty and never written here** (ledger,
         # disputed columns). S8's fixture sets it, on exactly the lines its own
-        # seeded suggestions became.
-        assert not SaleLine.objects.filter(from_suggestion=True).exists()
+        # seeded suggestions became -- so the claim this file owns is not that
+        # the column is empty, which stopped being true the day that fixture
+        # landed, but that **nothing else fills it**: every line carrying the
+        # flag is answered by an accepted suggestion pointing back at it. A
+        # counter fixture that started crediting its own lines would show up
+        # here as a line no suggestion accounts for.
+        from core.models import AssistantSuggestion
+
+        credited = set(
+            SaleLine.objects.filter(from_suggestion=True).values_list("id", flat=True)
+        )
+        accounted = set(
+            AssistantSuggestion.objects.filter(
+                accepted=True, sale_line__isnull=False
+            ).values_list("sale_line_id", flat=True)
+        )
+        assert credited == accounted
 
         # No invoicing target is configured, nothing is handed anywhere, and
         # that is the default state rather than an error (§8).

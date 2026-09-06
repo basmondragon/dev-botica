@@ -24,7 +24,29 @@ import { cn } from "@/ui/cn";
 import { Cobro, Receipt, type Applied, type CustomerPick } from "./cobro";
 import { Devolucion, FindSale, type ReturnLineDraft } from "./devolucion";
 import { LotPicker, PriceOverride } from "./line-controls";
-import { CaptureField, SearchColumn, type Hit } from "./search";
+import { CaptureField, SearchColumn, SearchResults, type Hit } from "./search";
+import { AssistantColumn } from "@/assistant/panel";
+import {
+  refreshBundle,
+  readBundle,
+  knowsTheCatalog,
+  type Bundle,
+} from "@/assistant/bundle";
+import { extract, type Fact } from "@/assistant/extract";
+import * as assistant from "@/assistant/pipeline";
+import {
+  mintOffer,
+  offerPayload,
+  queueClose,
+  forgetAsked,
+  queueOffer,
+  queueSupersede,
+  rememberCredit,
+  rememberQuery,
+  type Offer,
+} from "@/assistant/local";
+import { ask } from "@/api/assistant";
+import { useSettingsDialog } from "@/settings/use-settings";
 import { TicketPanel, type TicketLine } from "./ticket";
 import { CloseShift, OpenShift, type CloseReport } from "./turno";
 import {
@@ -36,6 +58,14 @@ import {
 } from "./capture";
 import { toCents } from "./money";
 import * as till from "./local";
+
+/**
+ * How long card B waits for prose before resolving to the local
+ * recommendation. It is the client's own ceiling and sits above the
+ * `model_timeout_ms` the server enforces: the server gives up first, and this
+ * is what covers a request that never reaches it at all.
+ */
+const ASSISTANT_TIMEOUT_MS = 6000;
 
 /**
  * `Mostrador · Venta` — the till.
@@ -105,6 +135,30 @@ export function Till({ me }: { me: Me }) {
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  /**
+   * S8 · the assistant column. **Every one of these lives in this component and
+   * not in the store**: a query is a question asked of a customer who is
+   * standing there, and the one durable record of it is the outbox row queued
+   * the moment its cards were drawn.
+   */
+  const transcriptField = useRef<HTMLTextAreaElement>(null);
+  const [bundle, setBundle] = useState<Bundle | null>(() => readBundle());
+  const [transcript, setTranscript] = useState("");
+  const [facts, setFacts] = useState<Fact[]>([]);
+  const [asked, setAsked] = useState(false);
+  const [cards, setCards] = useState<assistant.Card[]>([]);
+  const [surviving, setSurviving] = useState(0);
+  const [seeded, setSeeded] = useState(0);
+  const [offer, setOffer] = useState<Offer | null>(null);
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  const [prose, setProse] = useState({
+    primary: "",
+    secondary: "",
+    local: true,
+    loading: false,
+  });
+  const settingsDialog = useSettingsDialog();
 
   const focusCapture = useCallback(() => {
     field.current?.focus();
@@ -236,14 +290,14 @@ export function Till({ me }: { me: Me }) {
   }, []);
 
   const add = useCallback(
-    async (item: ItemDoc, quantity: number) => {
-      if (!database || !device || !shift) return;
+    async (item: ItemDoc, quantity: number): Promise<SaleLineDoc | null> => {
+      if (!database || !device || !shift) return null;
       const price = await till.priceOf(database, item.id);
       if (price === null) {
         setFailure(
           `${item.name} no tiene precio vigente en esta sede, así que no se puede agregar al tiquete.`,
         );
-        return;
+        return null;
       }
       const queue = item.tracks_lots
         ? await till.lotQueue(database, device, item.id)
@@ -283,9 +337,201 @@ export function Till({ me }: { me: Me }) {
       setUnresolved(null);
       setFailure("");
       focusCapture();
+      return line;
     },
     [database, device, shift, ticket, me, cache, refreshTicket, focusCapture],
   );
+
+  /**
+   * S8 · the bundle, cached with the device record.
+   *
+   * **A failure is not an event.** With no connection the till extracts against
+   * the bundle it already holds, which is the whole point of caching it; with
+   * none at all card C renders the configuration state, which is the honest
+   * reading and not the cold-start floor.
+   */
+  useEffect(() => {
+    if (!device) return;
+    let stale = false;
+    void refreshBundle(device).then((next) => {
+      if (!stale && next) setBundle(next);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [device]);
+
+  const assistantOn = bundle === null || bundle.enabled;
+
+  /**
+   * Steps 2 to 5, on the device, with **no request anywhere on the path**.
+   *
+   * The offer rows are queued the moment the cards exist, so the acceptance
+   * rate has a denominator whether or not this till ever reaches a server
+   * again. Card B's prose is asked for afterwards and is awaited by nothing:
+   * the local recommendation is already on screen, and where the model is off,
+   * capped, unreachable, slow or rejected it simply stays there under the
+   * `MODO LOCAL` eyebrow.
+   */
+  const runAssistant = useCallback(
+    async (next: Fact[]) => {
+      if (!database || !device || !bundle) {
+        setFacts(next);
+        setAsked(true);
+        return;
+      }
+      setFacts(next);
+      setAsked(true);
+      // The cashier re-asked on the same open sale: the previous query's
+      // un-accepted suggestions leave the denominator.
+      if (offer) await queueSupersede(database, offer.id);
+
+      const held = till.heldTicketId();
+      const lines = held
+        ? ((await database.collections
+            .sale_lines!.find({ selector: { kind: "line", parent_id: held } })
+            .exec()) as unknown as SaleLineDoc[])
+        : [];
+      const outcome = await assistant.run(database, {
+        locationId: device.location_id,
+        facts: next,
+        bundle,
+        ticketItemIds: lines
+          .map((line) => line.item_id)
+          .filter((one): one is string => !!one),
+      });
+      setCards(outcome.cards);
+      setSurviving(outcome.candidateCount);
+      setSeeded(outcome.seededCount);
+      setAdded(new Set());
+
+      const local = assistant.localProse(
+        outcome.cards,
+        outcome.candidateCount,
+        bundle,
+      );
+      setProse({ ...local, local: true, loading: outcome.cards.length > 0 });
+
+      // **A question with no candidates is still a question that was asked.**
+      // `assistant_queries` is one row per question at a counter, so the row is
+      // written whether or not the shelf had anything to answer with — it is
+      // what `Registro del asistente` reads and what the chipless share is
+      // measured over, and it contributes nothing to either side of the rate.
+      const minted = mintOffer(outcome.cards);
+      setOffer(minted);
+      // **Every query is attached to the ticket it was asked during**, whether
+      // or not a card was taken: a denominator that counted only the questions
+      // somebody acted on is a rate that reads 100%.
+      rememberQuery(minted.id);
+      const payload = offerPayload(minted, {
+        facts: next,
+        transcript,
+        candidateCount: outcome.candidateCount,
+        excluded: outcome.excluded,
+        bundleVersion: bundle.version,
+        saleId: held,
+        recommendation: local.primary,
+        recommendationSecondary: local.secondary,
+        retainTranscript: bundle.retain_transcripts,
+        userId: me.id,
+        userName: me.name,
+      });
+      await queueOffer(database, payload);
+      if (outcome.cards.length === 0) return;
+
+      // **Not awaited.** The cards are already painted and card B already has
+      // its local recommendation; the prose arrives when it arrives, and
+      // `Enter` gives the capture field back to the cashier at once rather
+      // than in six seconds' time (§B.13.3).
+      void ask(device, payload, ASSISTANT_TIMEOUT_MS).then((answer) => {
+        if (!answer || answer.mode !== "model") {
+          setProse((held_) => ({ ...held_, loading: false }));
+          return;
+        }
+        setProse({
+          primary: answer.recommendation,
+          secondary: answer.recommendation_secondary,
+          local: false,
+          loading: false,
+        });
+        const better = answer.reasons ?? {};
+        setCards((held_) =>
+          held_.map((card) =>
+            better[card.item.id]
+              ? { ...card, reason: better[card.item.id]! }
+              : card,
+          ),
+        );
+      });
+    },
+    [database, device, bundle, offer, transcript, me],
+  );
+
+  const commitTranscript = useCallback(() => {
+    void runAssistant(extract(transcript, bundle)).then(focusCapture);
+  }, [runAssistant, transcript, bundle, focusCapture]);
+
+  /**
+   * **Removing a chip re-runs the whole pipeline including the filter.** A chip
+   * is not a display artefact, it is the filter's input — a screen where
+   * deleting *fiebre* leaves the item still filtered is a screen that has
+   * stopped telling the truth.
+   */
+  const removeChip = useCallback(
+    (fact: Fact) => {
+      void runAssistant(
+        facts.filter(
+          (one) => !(one.kind === fact.kind && one.key === fact.key),
+        ),
+      ).then(focusCapture);
+    },
+    [runAssistant, facts, focusCapture],
+  );
+
+  /**
+   * `Agregar` · the line goes on optimistically with no loading state
+   * (§B.10.1), the card stays on screen with its button in the added state, and
+   * focus returns to the capture field so the next barcode scan lands in it
+   * (§B.13.3).
+   */
+  const addSuggestion = useCallback(
+    async (card: assistant.Card) => {
+      if (!database || !offer) return;
+      const line = await add(card.item, 1);
+      if (!line) return;
+      setAdded((held) => new Set(held).add(card.item.id));
+      const document = await database.collections
+        .sale_lines!.findOne(line.id)
+        .exec();
+      await document?.incrementalPatch({ from_suggestion: true });
+      const entry = offer.cards.find(
+        (one) => one.card.item.id === card.item.id,
+      );
+      if (entry) {
+        rememberCredit(line.parent_id, {
+          suggestion_id: entry.id,
+          query_id: offer.id,
+          line_id: line.id,
+        });
+      }
+      await refreshTicket();
+      focusCapture();
+    },
+    [database, offer, add, refreshTicket, focusCapture],
+  );
+
+  const clearAssistant = useCallback(() => {
+    forgetAsked();
+    // **The transcript leaves the till when the sale closes** — a shared till in
+    // a shop is not a place for a queue of other people's symptoms (§11.3).
+    setTranscript("");
+    setFacts([]);
+    setCards([]);
+    setAsked(false);
+    setOffer(null);
+    setAdded(new Set());
+    setProse({ primary: "", secondary: "", local: true, loading: false });
+  }, []);
 
   /**
    * The terminating `Enter`.
@@ -352,6 +598,11 @@ export function Till({ me }: { me: Me }) {
           // counter (§3).
           change,
         });
+        // **Queued after S4's own lines and its sale**, which is what makes
+        // the acceptance arrive behind the line it credits: `client_uuid` is
+        // uuid v7 and the push applies a batch in that order.
+        await queueClose(database, ticket.sale.id, closed.lines);
+        clearAssistant();
         setCobro(false);
         setAttached(null);
         setTicket(null);
@@ -367,7 +618,7 @@ export function Till({ me }: { me: Me }) {
         setBusy(false);
       }
     },
-    [database, ticket, attached],
+    [database, ticket, attached, clearAssistant],
   );
 
   if (!database || !device) {
@@ -383,6 +634,37 @@ export function Till({ me }: { me: Me }) {
       </>
     );
   }
+
+  /** **One capture field, in the position it has always held** — the top of the
+   *  left column. The code that matched nothing travels with it, kept **in the
+   *  field** so the cashier can read it out — never a toast and never a dialog
+   *  (§B.10.3). The assistant borrows the column below it; the field itself
+   *  does not move, which is what keeps S4's scan path and criterion 27 intact
+   *  whichever way `enabled` is set. */
+  const captureField = (
+    <>
+      <CaptureField
+        ref={field}
+        value={term}
+        invalid={!!unresolved}
+        onChange={(next) => {
+          noteKeystroke(cadence.current);
+          setUnresolved(null);
+          setTerm(next);
+        }}
+        onEnter={() => void commitCapture()}
+        onEscape={() => {
+          setTerm("");
+          setUnresolved(null);
+        }}
+      />
+      {unresolved ? (
+        <p className="mt-1.5 text-12 text-critical">
+          Código no encontrado {DOT} {unresolved}
+        </p>
+      ) : null}
+    </>
+  );
 
   const ticketLines: TicketLine[] = (ticket?.lines ?? []).map((line) => ({
     line,
@@ -435,36 +717,67 @@ export function Till({ me }: { me: Me }) {
           COUNTER_INSET,
         )}
       >
-        <SearchColumn
-          term={term}
-          hits={visible}
-          unresolved={unresolved}
-          referenceCount={referenceCount}
-          locationName={device.location_name}
-          onAdd={(hit) => void add(hit.item, 1)}
-          onClear={() => {
-            setTerm("");
-            setUnresolved(null);
-            focusCapture();
-          }}
-          field={
-            <CaptureField
-              ref={field}
-              value={term}
-              invalid={!!unresolved}
-              onChange={(next) => {
-                noteKeystroke(cadence.current);
-                setUnresolved(null);
-                setTerm(next);
-              }}
-              onEnter={() => void commitCapture()}
-              onEscape={() => {
-                setTerm("");
-                setUnresolved(null);
-              }}
-            />
-          }
-        />
+        {assistantOn ? (
+          <AssistantColumn
+            field={captureField}
+            /* **S4's list, re-rendered as an L3 overlay anchored under the
+               capture field** — which is what S4's own component was built to
+               do when this stage took its column. It appears only while there
+               is something typed: an overlay carrying the deliberately-empty
+               state would cover card A to say nothing. */
+            overlay={
+              term.trim() ? (
+                <SearchResults
+                  term={term}
+                  hits={visible}
+                  referenceCount={referenceCount}
+                  locationName={device.location_name}
+                  onAdd={(hit) => void add(hit.item, 1)}
+                  onClear={() => {
+                    setTerm("");
+                    setUnresolved(null);
+                    focusCapture();
+                  }}
+                />
+              ) : null
+            }
+            asked={asked}
+            transcript={transcript}
+            facts={facts}
+            cards={cards}
+            surviving={surviving}
+            locationName={device.location_name}
+            added={added}
+            primary={prose.primary}
+            secondary={prose.secondary}
+            local={prose.local}
+            loading={prose.loading}
+            emptyTitle={assistant.stringsOf(bundle).empty?.title ?? ""}
+            emptyBody={assistant.emptyBody(seeded, bundle)}
+            knowsCatalog={knowsTheCatalog(bundle)}
+            canConfigure={me.role !== "cashier"}
+            transcriptRef={transcriptField}
+            onTranscript={setTranscript}
+            onCommit={commitTranscript}
+            onRemoveChip={removeChip}
+            onAdd={(card) => void addSuggestion(card)}
+            onConfigure={() => settingsDialog.show("assistant")}
+          />
+        ) : (
+          <SearchColumn
+            term={term}
+            hits={visible}
+            referenceCount={referenceCount}
+            locationName={device.location_name}
+            onAdd={(hit) => void add(hit.item, 1)}
+            onClear={() => {
+              setTerm("");
+              setUnresolved(null);
+              focusCapture();
+            }}
+            field={captureField}
+          />
+        )}
 
         <TicketPanel
           lines={ticketLines}
@@ -902,7 +1215,9 @@ async function resolveHits(
     away.set(row.item_id, perSede);
   }
   const policies = (await database.collections
-    .stock_policies!.find({ selector: { item_id: { $in: ids } } })
+    .stock_policies!.find({
+      selector: { kind: "policy", item_id: { $in: ids } },
+    })
     .exec()) as unknown as PolicyDoc[];
   const reorder = new Map<string, number | null>();
   for (const row of policies) {

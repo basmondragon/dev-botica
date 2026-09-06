@@ -72,6 +72,28 @@ def read(tenant) -> dict:
     return {**DEFAULTS, **tenant_settings.read_group(tenant, GROUP)}
 
 
+#: The keys a **registry predicate** reads that belong to another stage's group.
+#: The registry declares one predicate per collection and `pull.py` evaluates it
+#: over `options`, so a collection scoped by a setting its owner holds needs that
+#: setting in the same mapping. S8's `cross_sell_rules` is the first: its
+#: membership floor and its per-anchor cap are two keys of the `assistant` group.
+#:
+#: **They are copied in rather than read at the predicate**, because the
+#: predicate runs once per row of every page and `/api/sync/pull` has a 20 ms
+#: p95 budget (§4) -- a settings read inside it would be a query per page per
+#: collection.
+BORROWED = ("cross_sell_min_support", "cross_sell_rules_per_item")
+
+
+def options(tenant) -> dict:
+    """What every registry predicate is evaluated against: this group, plus the
+    handful of keys another stage's group owns and the registry reads."""
+    from core.assistant import settings as assistant_settings
+
+    borrowed = assistant_settings.read(tenant)
+    return {**read(tenant), **{key: borrowed[key] for key in BORROWED}}
+
+
 def write(tenant, values: dict) -> dict:
     """Write the group through S0's helper. Returns what was written."""
     merged = {**read(tenant), **values}

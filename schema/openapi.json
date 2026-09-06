@@ -6988,6 +6988,841 @@
           }
         ]
       }
+    },
+    "/api/assistant/queries": {
+      "post": {
+        "operationId": "core_assistant_api_ask",
+        "summary": "Ask",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantAskOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Ask. **Idempotent on `(tenant_id, client_uuid)`** (A5).\n\nThe chips, the filter, the ranking and the cards were all computed on the\ndevice before this was called, and they are what the body carries. What this\nendpoint adds is the recommendation's two registers -- and where the model\nis off, capped, unreachable, slow or rejected, it adds them from the same\nranking by a template over `reason_code` and stamps `mode = 'local'`.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantAskIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "core_assistant_api_query_log",
+        "summary": "Query Log",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "model",
+                    "local"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "passed",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Passed"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AssistantQueryRowOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The query log. **Renders only what retention has kept.**",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assistant/suggestions/{suggestion_id}/accept": {
+      "post": {
+        "operationId": "core_assistant_api_accept",
+        "summary": "Accept",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "suggestion_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Suggestion Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantSuggestionOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Record acceptance and flag the line, in one transaction.\n\n**Idempotent** -- a second call with the same `sale_line_id` returns the row\nunchanged; a call naming a different line is refused.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantAcceptIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assistant/queries/{query_id}/supersede": {
+      "post": {
+        "operationId": "core_assistant_api_supersede",
+        "summary": "Supersede",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "query_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Query Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response",
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "description": "The cashier re-asked on the same open sale.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assistant/bundle": {
+      "get": {
+        "operationId": "core_assistant_api_bundle",
+        "summary": "Bundle",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantBundleOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The client reference bundle and its version.\n\n**Not a registry collection.** The lexicon, the vocabulary and the tenant's\nmap are one document of a few kilobytes with no per-row deltas and no\nnatural key worth versioning, so they are cached with the device record and\nrefreshed when the version changes -- the same treatment S2 gives the sede's\nown name and code. A fifth collection to compact and reconcile for one\ndocument is what rule 9 exists to prevent.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/assistant/metrics": {
+      "get": {
+        "operationId": "core_assistant_api_metrics",
+        "summary": "Metrics",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "default": 30,
+              "title": "Days",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantMetricsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Offered, accepted, the rate, the mode split, the rejection rate, the\nmonth-to-date spend, and the three definitions over a period and a sede set.\n\n**S9 reads these and derives none of them a second way** (*Hands off*).",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/item-warnings": {
+      "get": {
+        "operationId": "core_assistant_api_list_warnings",
+        "summary": "List Warnings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "interaction",
+                    "contraindication",
+                    "do_not_suggest_if"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "blocking",
+                    "advisory"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "catalog",
+                    "manual"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ItemWarningOut_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "core_assistant_api_create_warning",
+        "summary": "Create Warning",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemWarningOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create one. `triggers` is validated against the closed vocabulary and\nrefused otherwise, at **field scope**, naming the key (§B.10.3).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemWarningIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/item-warnings/{warning_id}": {
+      "patch": {
+        "operationId": "core_assistant_api_edit_warning",
+        "summary": "Edit Warning",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "warning_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Warning Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemWarningOut"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemWarningPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "core_assistant_api_deactivate_warning",
+        "summary": "Deactivate Warning",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "warning_id",
+            "schema": {
+              "format": "uuid",
+              "title": "Warning Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemWarningOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "**Deactivates -- sets `active = false`.**\n\nA registry collection is never hard-deleted while the registry lists it, or\nthe row lives on every till forever (S2, criterion 14). The device sees a\ndeparture marker on its next pull and stops filtering on it.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cross-sell-rules": {
+      "get": {
+        "operationId": "core_assistant_api_list_rules",
+        "summary": "List Rules",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 25,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Order",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "item_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Item Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "network",
+            "schema": {
+              "default": false,
+              "title": "Network",
+              "type": "boolean"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CrossSellRuleOut_"
+                }
+              }
+            }
+          }
+        },
+        "description": "The mined rules, read-only. **So a regente can see why the assistant\noffers what it offers.**\n\nAjustes' provenance line -- `Reglas calculadas sobre {ventana} · {n} tickets\n· actualizadas el {fecha}` -- is composed from `window`, `ticket_count` and\n`computed_at`, which every row already carries. There is no endpoint for it,\nbecause a second path for three columns already on the wire is a path the\n*API surface* contract does not name.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/cross-sell-rules/refresh": {
+      "post": {
+        "operationId": "core_assistant_api_refresh_rules",
+        "summary": "Refresh Rules",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "location_id",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrossSellRefreshOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Run the miner now, for a tenant or for one sede. **Returns the job\nhandle, not the rules** -- mining is asynchronous and a request that waited\nfor it would be a request that timed out on a network with real history.\n\nA sede named here fans out one job for that scope alone; with none, the\ntenant fans out one per sede plus the network pass.",
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
+    },
+    "/api/settings/assistant": {
+      "get": {
+        "operationId": "core_assistant_api_read_settings",
+        "summary": "Read Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "core_assistant_api_write_settings",
+        "summary": "Write Settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantSettingsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Written through S0's single-group helper -- one `jsonb_set`, every other\ngroup untouched, raising rather than passing quietly when the `UPDATE`\nmatches no row (rule 5). Audit-logged.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "RoleAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -18788,6 +19623,1422 @@
           }
         },
         "title": "PricingSettingsIn",
+        "type": "object"
+      },
+      "AssistantAskOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "model",
+              "local"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "recommendation": {
+            "title": "Recommendation",
+            "type": "string"
+          },
+          "recommendation_secondary": {
+            "title": "Recommendation Secondary",
+            "type": "string"
+          },
+          "reasons": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "object"
+          },
+          "output_check_passed": {
+            "title": "Output Check Passed",
+            "type": "boolean"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantSuggestionOut"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "mode",
+          "recommendation",
+          "recommendation_secondary",
+          "reasons",
+          "output_check_passed",
+          "suggestions"
+        ],
+        "title": "AssistantAskOut",
+        "type": "object"
+      },
+      "AssistantSuggestionOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "client_uuid": {
+            "format": "uuid",
+            "title": "Client Uuid",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "first_choice",
+              "conditional",
+              "bought_together"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Price",
+            "type": "string"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "available_quantity": {
+            "title": "Available Quantity",
+            "type": "integer"
+          },
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "client_uuid",
+          "item_id",
+          "type",
+          "reason",
+          "reason_code",
+          "price",
+          "rank",
+          "available_quantity",
+          "accepted"
+        ],
+        "title": "AssistantSuggestionOut",
+        "type": "object"
+      },
+      "AssistantAskIn": {
+        "properties": {
+          "client_uuid": {
+            "format": "uuid",
+            "title": "Client Uuid",
+            "type": "string"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "sale_client_uuid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Client Uuid"
+          },
+          "transcript": {
+            "default": "",
+            "title": "Transcript",
+            "type": "string"
+          },
+          "symptoms": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssistantSymptomIn"
+            },
+            "title": "Symptoms",
+            "type": "array"
+          },
+          "candidates": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssistantCandidateIn"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "candidate_count": {
+            "default": 0,
+            "title": "Candidate Count",
+            "type": "integer"
+          },
+          "excluded": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Excluded",
+            "type": "array"
+          },
+          "bundle_version": {
+            "default": "",
+            "title": "Bundle Version",
+            "type": "string"
+          },
+          "ruleset_computed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ruleset Computed At"
+          }
+        },
+        "required": [
+          "client_uuid"
+        ],
+        "title": "AssistantAskIn",
+        "type": "object"
+      },
+      "AssistantCandidateIn": {
+        "description": "One card the till drew, with the `client_uuid` its row will carry.",
+        "properties": {
+          "client_uuid": {
+            "format": "uuid",
+            "title": "Client Uuid",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "first_choice",
+              "conditional",
+              "bought_together"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "reason_code": {
+            "default": "",
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Price"
+          },
+          "rank": {
+            "default": 1,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "available_quantity": {
+            "default": 0,
+            "title": "Available Quantity",
+            "type": "integer"
+          },
+          "warning_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warning Id"
+          },
+          "rule_confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule Confidence"
+          },
+          "pair_share": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Share"
+          },
+          "pair_anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Anchor"
+          }
+        },
+        "required": [
+          "client_uuid",
+          "item_id",
+          "type",
+          "price"
+        ],
+        "title": "AssistantCandidateIn",
+        "type": "object"
+      },
+      "AssistantSymptomIn": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "source": {
+            "default": "lexicon",
+            "title": "Source",
+            "type": "string"
+          },
+          "negated": {
+            "default": false,
+            "title": "Negated",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "kind"
+        ],
+        "title": "AssistantSymptomIn",
+        "type": "object"
+      },
+      "AssistantQueryRowOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "location_id": {
+            "format": "uuid",
+            "title": "Location Id",
+            "type": "string"
+          },
+          "location_name": {
+            "title": "Location Name",
+            "type": "string"
+          },
+          "user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Name"
+          },
+          "symptoms": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symptoms"
+          },
+          "mode": {
+            "enum": [
+              "model",
+              "local"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "output_check_passed": {
+            "title": "Output Check Passed",
+            "type": "boolean"
+          },
+          "output_check_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Check Flags",
+            "type": "array"
+          },
+          "accepted_count": {
+            "title": "Accepted Count",
+            "type": "integer"
+          },
+          "offered_count": {
+            "title": "Offered Count",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Cost Usd",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "purged": {
+            "title": "Purged",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "recorded_at",
+          "location_id",
+          "location_name",
+          "user_name",
+          "symptoms",
+          "mode",
+          "output_check_passed",
+          "output_check_flags",
+          "accepted_count",
+          "offered_count",
+          "cost_usd",
+          "latency_ms",
+          "purged"
+        ],
+        "title": "AssistantQueryRowOut",
+        "type": "object"
+      },
+      "Page_AssistantQueryRowOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantQueryRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[AssistantQueryRowOut]",
+        "type": "object"
+      },
+      "AssistantAcceptIn": {
+        "properties": {
+          "sale_line_id": {
+            "format": "uuid",
+            "title": "Sale Line Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sale_line_id"
+        ],
+        "title": "AssistantAcceptIn",
+        "type": "object"
+      },
+      "AssistantBundleOut": {
+        "properties": {
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "symptoms": {
+            "additionalProperties": true,
+            "title": "Symptoms",
+            "type": "object"
+          },
+          "populations": {
+            "additionalProperties": true,
+            "title": "Populations",
+            "type": "object"
+          },
+          "ingredients": {
+            "additionalProperties": true,
+            "title": "Ingredients",
+            "type": "object"
+          },
+          "treatment_leads": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Treatment Leads",
+            "type": "array"
+          },
+          "negations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Negations",
+            "type": "array"
+          },
+          "number_words": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Number Words",
+            "type": "object"
+          },
+          "age_populations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Age Populations",
+            "type": "array"
+          },
+          "symptom_category_map": {
+            "additionalProperties": true,
+            "title": "Symptom Category Map",
+            "type": "object"
+          },
+          "strings": {
+            "additionalProperties": true,
+            "title": "Strings",
+            "type": "object"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "suggestion_card_count": {
+            "title": "Suggestion Card Count",
+            "type": "integer"
+          },
+          "retain_transcripts": {
+            "title": "Retain Transcripts",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version",
+          "symptoms",
+          "populations",
+          "ingredients",
+          "treatment_leads",
+          "negations",
+          "number_words",
+          "age_populations",
+          "symptom_category_map",
+          "strings",
+          "enabled",
+          "suggestion_card_count",
+          "retain_transcripts"
+        ],
+        "title": "AssistantBundleOut",
+        "type": "object"
+      },
+      "AssistantMetricsOut": {
+        "properties": {
+          "offered": {
+            "title": "Offered",
+            "type": "integer"
+          },
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate"
+          },
+          "model_queries": {
+            "title": "Model Queries",
+            "type": "integer"
+          },
+          "local_queries": {
+            "title": "Local Queries",
+            "type": "integer"
+          },
+          "rejected_queries": {
+            "title": "Rejected Queries",
+            "type": "integer"
+          },
+          "rejection_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Rate"
+          },
+          "spend_month_to_date": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spend Month To Date",
+            "type": "string"
+          },
+          "spend_cap": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Spend Cap",
+            "type": "string"
+          },
+          "suggested_tickets": {
+            "title": "Suggested Tickets",
+            "type": "integer"
+          },
+          "suggested_mean": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Mean"
+          },
+          "plain_tickets": {
+            "title": "Plain Tickets",
+            "type": "integer"
+          },
+          "plain_mean": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plain Mean"
+          },
+          "combinations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Combinations",
+            "type": "array"
+          },
+          "rejection_alert": {
+            "title": "Rejection Alert",
+            "type": "boolean"
+          },
+          "alert_threshold": {
+            "title": "Alert Threshold",
+            "type": "number"
+          },
+          "queries_without_chips": {
+            "title": "Queries Without Chips",
+            "type": "integer"
+          },
+          "unmapped_symptom_keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped Symptom Keys",
+            "type": "array"
+          },
+          "dormant_warnings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dormant Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "offered",
+          "accepted",
+          "rate",
+          "model_queries",
+          "local_queries",
+          "rejected_queries",
+          "rejection_rate",
+          "spend_month_to_date",
+          "spend_cap",
+          "suggested_tickets",
+          "suggested_mean",
+          "plain_tickets",
+          "plain_mean",
+          "combinations",
+          "rejection_alert",
+          "alert_threshold",
+          "queries_without_chips",
+          "unmapped_symptom_keys",
+          "dormant_warnings"
+        ],
+        "title": "AssistantMetricsOut",
+        "type": "object"
+      },
+      "ItemWarningOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_name": {
+            "title": "Item Name",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "interaction",
+              "contraindication",
+              "do_not_suggest_if"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "blocking",
+              "advisory"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "catalog",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "triggers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Triggers",
+            "type": "array"
+          },
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "last_matched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Matched At"
+          },
+          "never_matched": {
+            "title": "Never Matched",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "item_id",
+          "item_name",
+          "type",
+          "text",
+          "severity",
+          "source",
+          "triggers",
+          "active",
+          "last_matched_at",
+          "never_matched"
+        ],
+        "title": "ItemWarningOut",
+        "type": "object"
+      },
+      "Page_ItemWarningOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ItemWarningOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[ItemWarningOut]",
+        "type": "object"
+      },
+      "ItemWarningIn": {
+        "properties": {
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "interaction",
+              "contraindication",
+              "do_not_suggest_if"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "blocking",
+              "advisory"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "triggers": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Triggers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_id",
+          "type",
+          "text",
+          "severity"
+        ],
+        "title": "ItemWarningIn",
+        "type": "object"
+      },
+      "ItemWarningPatch": {
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "blocking",
+                  "advisory"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
+          "triggers": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triggers"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          }
+        },
+        "title": "ItemWarningPatch",
+        "type": "object"
+      },
+      "CrossSellRuleOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "item_a_id": {
+            "format": "uuid",
+            "title": "Item A Id",
+            "type": "string"
+          },
+          "item_a": {
+            "title": "Item A",
+            "type": "string"
+          },
+          "item_b_id": {
+            "format": "uuid",
+            "title": "Item B Id",
+            "type": "string"
+          },
+          "item_b": {
+            "title": "Item B",
+            "type": "string"
+          },
+          "support": {
+            "title": "Support",
+            "type": "integer"
+          },
+          "confidence": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "lift": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Lift",
+            "type": "string"
+          },
+          "window": {
+            "title": "Window",
+            "type": "string"
+          },
+          "ticket_count": {
+            "title": "Ticket Count",
+            "type": "integer"
+          },
+          "basis": {
+            "enum": [
+              "counter",
+              "imported",
+              "mixed"
+            ],
+            "title": "Basis",
+            "type": "string"
+          },
+          "confidence_band": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence Band",
+            "type": "string"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "location_name",
+          "item_a_id",
+          "item_a",
+          "item_b_id",
+          "item_b",
+          "support",
+          "confidence",
+          "lift",
+          "window",
+          "ticket_count",
+          "basis",
+          "confidence_band",
+          "computed_at"
+        ],
+        "title": "CrossSellRuleOut",
+        "type": "object"
+      },
+      "Page_CrossSellRuleOut_": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CrossSellRuleOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "row_count": {
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "row_count",
+          "page",
+          "page_size"
+        ],
+        "title": "Page[CrossSellRuleOut]",
+        "type": "object"
+      },
+      "CrossSellRefreshOut": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          }
+        },
+        "required": [
+          "queued",
+          "detail"
+        ],
+        "title": "CrossSellRefreshOut",
+        "type": "object"
+      },
+      "AssistantSettingsOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "model_enabled": {
+            "title": "Model Enabled",
+            "type": "boolean"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "monthly_spend_cap_usd": {
+            "title": "Monthly Spend Cap Usd",
+            "type": "number"
+          },
+          "model_timeout_ms": {
+            "title": "Model Timeout Ms",
+            "type": "integer"
+          },
+          "retain_transcripts": {
+            "title": "Retain Transcripts",
+            "type": "boolean"
+          },
+          "transcript_retention_days": {
+            "title": "Transcript Retention Days",
+            "type": "integer"
+          },
+          "symptom_category_map": {
+            "additionalProperties": true,
+            "title": "Symptom Category Map",
+            "type": "object"
+          },
+          "suggestion_card_count": {
+            "title": "Suggestion Card Count",
+            "type": "integer"
+          },
+          "cross_sell_min_support": {
+            "title": "Cross Sell Min Support",
+            "type": "integer"
+          },
+          "cross_sell_min_confidence": {
+            "title": "Cross Sell Min Confidence",
+            "type": "number"
+          },
+          "cross_sell_rules_per_item": {
+            "title": "Cross Sell Rules Per Item",
+            "type": "integer"
+          },
+          "cross_sell_window_days": {
+            "title": "Cross Sell Window Days",
+            "type": "integer"
+          },
+          "output_check_alert_rate": {
+            "title": "Output Check Alert Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "enabled",
+          "model_enabled",
+          "model",
+          "monthly_spend_cap_usd",
+          "model_timeout_ms",
+          "retain_transcripts",
+          "transcript_retention_days",
+          "symptom_category_map",
+          "suggestion_card_count",
+          "cross_sell_min_support",
+          "cross_sell_min_confidence",
+          "cross_sell_rules_per_item",
+          "cross_sell_window_days",
+          "output_check_alert_rate"
+        ],
+        "title": "AssistantSettingsOut",
+        "type": "object"
+      },
+      "AssistantSettingsPatch": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "model_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Enabled"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "monthly_spend_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Spend Cap Usd"
+          },
+          "model_timeout_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Timeout Ms"
+          },
+          "retain_transcripts": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retain Transcripts"
+          },
+          "transcript_retention_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transcript Retention Days"
+          },
+          "symptom_category_map": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symptom Category Map"
+          },
+          "suggestion_card_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Card Count"
+          },
+          "cross_sell_min_support": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Sell Min Support"
+          },
+          "cross_sell_min_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Sell Min Confidence"
+          },
+          "cross_sell_rules_per_item": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Sell Rules Per Item"
+          },
+          "cross_sell_window_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Sell Window Days"
+          },
+          "output_check_alert_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Check Alert Rate"
+          }
+        },
+        "title": "AssistantSettingsPatch",
         "type": "object"
       }
     },

@@ -88,15 +88,26 @@ describe("the seven empty routes", () => {
 describe("the settings dialog", () => {
   /**
    * §B.8.3 · a `cashier` does not reach Ajustes. The gear is absent from their
-   * footer, ⌘, opens nothing for them, and a pasted `?settings=` param is what
-   * this gate is for -- a search param is a link, and links get shared.
+   * footer and ⌘, opens nothing for them, so the only way here is a pasted
+   * `?settings=` param — a search param is a link, and links get shared.
+   *
+   * **What that param gets is a refusal naming the role, not silence.** S0
+   * originally rendered nothing at all; S8's criterion 24 settled it the other
+   * way — *"a denial in the content region naming the role required — not a
+   * redirect, not a blank pane"* — which is also what `RoleGate` already says
+   * about a route: a link that shows nothing is indistinguishable from a broken
+   * one. The rail is empty for the role and no section renders behind it.
    */
-  it("does not open for a cashier, even from a pasted search param", () => {
+  it("refuses a cashier by name rather than rendering nothing", () => {
     const { container } = renderWithProviders(
       <SettingsDialog me={ANDRES} />,
       ANDRES,
     );
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(
+      screen.getByText(/requiere el perfil Propietaria o Administradora/),
+    ).toBeTruthy();
+    expect(container.querySelectorAll("nav button")).toHaveLength(0);
   });
 
   it("opens for an administrator", () => {

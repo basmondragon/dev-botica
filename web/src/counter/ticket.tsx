@@ -239,6 +239,13 @@ function Line({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 pl-8">
+        {/* §A.19.4 · **the one thing S8 adds to this panel**, and it is a
+            reading rather than a control: the line came off a suggestion card,
+            which is what `sale_lines.from_suggestion` records and what the
+            Panel's acceptance tile rests on. */}
+        {line.from_suggestion ? (
+          <span className="text-11 text-ink-note">{DOT} sugerido</span>
+        ) : null}
         {item?.requires_prescription ? (
           <Flag {...LINE_FLAGS.prescription} />
         ) : null}

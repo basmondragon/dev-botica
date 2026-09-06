@@ -36,6 +36,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # S8 · `assistant_queries.output_check_flags` is a real `text[]`, and
+    # Django 6 refuses `ArrayField` without this app registered. It ships no
+    # table, no migration and no extension -- it is the field library.
+    "django.contrib.postgres",
     "allauth",
     "allauth.account",
     "allauth.headless",

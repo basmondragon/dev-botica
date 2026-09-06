@@ -70,3 +70,10 @@ from core.purchasing import demo as purchasing  # noqa: E402,F401  -- "purchasin
 # price editor, because `taken`, `modified` and `dismissed` are S1's writes and
 # a fixture that stamped them would model a write path that does not exist.
 from core.pricing import demo as pricing  # noqa: E402,F401  -- "pricing"
+
+# S8's fixture: the symptom map, the safety layer, the mined rules and the
+# offers. **It writes no `cross_sell_rules` row by hand** -- it runs
+# `assistant.cross_sell_refresh` over the sales S4 wrote, because a seeded rule
+# table hides the one failure this seed most needs to catch, which is a miner
+# that runs and produces nothing above the floor.
+from core.assistant import demo as assistant  # noqa: E402,F401  -- "assistant"

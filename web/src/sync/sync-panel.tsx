@@ -3,7 +3,8 @@ import { Button } from "@/ui/button";
 import { cn } from "@/ui/cn";
 import { DOT, count, decimal, since } from "@/ui/format";
 import { StatusDot } from "@/ui/status";
-import { QUEUE_LABELS, queueGroups } from "./registry";
+import { QUEUE_LABELS, queueGroups, type PolicyDoc } from "./registry";
+import type { SyncDatabase } from "./store";
 import { storageUsedBytes } from "./device";
 import { useSync } from "./context";
 
@@ -40,13 +41,30 @@ function Line({
 export function SyncPanel({ className }: { className?: string }) {
   const sync = useSync();
   const [used, setUsed] = useState<number | null>(null);
+  const [rulesAt, setRulesAt] = useState<string | null>(null);
   const frame = useRef<HTMLDivElement | null>(null);
   const { panelOpen, setPanelOpen } = sync;
+  const database = sync.database;
 
   useEffect(() => {
     if (!panelOpen) return;
     void storageUsedBytes().then(setUsed);
   }, [panelOpen]);
+
+  // S8 · **the mined rules' freshness, stated once and here.** The percentage
+  // inside a `Se lleva junto` reason is a figure from that run and can be a week
+  // old; it carries no per-card marker, because forty dots on a counter screen
+  // is the alarm fatigue §B.9.2's convention exists to prevent.
+  useEffect(() => {
+    if (!panelOpen || !database) return;
+    let stale = false;
+    void newestRuleAt(database).then((at) => {
+      if (!stale) setRulesAt(at);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [panelOpen, database]);
 
   // A popover closes on `Escape` and on a click outside it (§B.13.1). It does
   // **not** trap focus: it is a read-out over a counter surface, and a till
@@ -103,6 +121,9 @@ export function SyncPanel({ className }: { className?: string }) {
       <Line label="Último envío">
         {snapshot.lastPushAt ? since(snapshot.lastPushAt) : "—"}
       </Line>
+      {rulesAt ? (
+        <Line label="Reglas del asistente">{since(rulesAt)}</Line>
+      ) : null}
 
       {/* §B.9.3 · the pending queue broken down by kind. At S2 that is
           `Clientes 1`; S3 adds `Movimientos` and S4 `Ventas` by adding a label,
@@ -189,4 +210,19 @@ function clockPhrase(skewMs: number) {
       ? `${count(Math.round(minutes / 60))} h`
       : `${count(Math.max(1, minutes))} min`;
   return `${magnitude} ${skewMs > 0 ? "adelantado" : "atrasado"}`;
+}
+
+/** The freshest `computed_at` on any rule this till holds. Null where the
+ *  tenant has none, which is a new network's normal first state and not a
+ *  staleness anybody needs told about. */
+async function newestRuleAt(database: SyncDatabase): Promise<string | null> {
+  const rows = (await database.collections
+    .stock_policies!.find({ selector: { kind: "rule" } })
+    .exec()) as unknown as PolicyDoc[];
+  let newest: string | null = null;
+  for (const row of rows) {
+    const at = row.computed_at ?? null;
+    if (at && (!newest || at > newest)) newest = at;
+  }
+  return newest;
 }

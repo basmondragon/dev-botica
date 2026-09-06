@@ -394,6 +394,27 @@ def test_every_registry_collection_leaves_by_an_update_or_is_declared():
         "payments": "its sale's window, resolved over the page by enrich",
         "sale_returns": "the seven-day window on occurred_at",
         "sale_return_lines": "its return's window, resolved over the page by enrich",
+        # S8 · the two the till reads, and the two it only ever writes.
+        "item_warnings": (
+            "item_warnings.active — a warning is deactivated and never deleted, "
+            "so the row is served carrying its own deletion marker and is gone "
+            "from every till within one pull interval rather than at the next "
+            "digest. That is the shape the safety layer needs: a warning "
+            "withdrawn because it was wrong must stop being shown on the "
+            "evidence of the withdrawal, not on a daily repair"
+        ),
+        "cross_sell_rules": (
+            "the support floor — the miner zeroes `support` in place on a pair "
+            "that stops clearing it rather than deleting the row, so the "
+            "departure is served: `updated_at` moves, the row arrives, and the "
+            "membership predicate drops it. A hard delete here would leave "
+            "nothing for the pull to evaluate and the rule would be suggested "
+            "on every till until the daily digest re-pulled the collection"
+        ),
+        "assistant_queries": "write-only — a device sends it and never reads it back",
+        "assistant_suggestions": (
+            "write-only — a device sends it and never reads it back"
+        ),
     }
     assert set(departure) == set(registry.BY_NAME), (
         "a collection was added to the registry without saying how a row leaves "

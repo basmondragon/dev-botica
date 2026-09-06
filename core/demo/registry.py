@@ -179,14 +179,75 @@ def check_guard(context):
             )
 
 
+def _analysable():
+    """The public tables this connection's role is allowed to `ANALYZE`.
+
+    The runtime role owns nothing (A1: it is granted rights on tables the
+    migration role owns), and `ANALYZE` on a table you do not own is not an
+    error -- it is a `WARNING: permission denied to analyze` per table and no
+    statistics. Asking the catalog which tables are ours turns that into an
+    empty list and silence, so a seed run under either role behaves.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT c.relname FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE c.relkind = 'r' AND n.nspname = 'public' "
+            "AND pg_get_userbyid(c.relowner) = current_user "
+            "ORDER BY c.relname"
+        )
+        return [row[0] for row in cursor.fetchall()]
+
+
+def _analyze(tables):
+    """Refresh the planner's statistics between fixtures.
+
+    **A seed inserts every row it will ever hold inside one transaction, and
+    autovacuum cannot see a transaction that has not committed.** So each
+    fixture plans against whatever statistics the tables held before the run,
+    which on a database the suite creates fresh say `sales` and `sale_lines`
+    are empty. The planner reads a join over two empty tables as free, picks a
+    nested loop, and scans one side once per row of the other.
+
+    On a pristine heap that plan is wrong and still fast -- there are few
+    physical pages to scan, so the cost hides. It stops hiding once a test
+    session has rolled back a few seeds: the dead tuples stay in the heap until
+    something vacuums them, the same nested loop now walks all of them, and the
+    query that took a moment on the first test takes a minute on the twelfth.
+    Measured that way rather than guessed: S8's miner sat on one `sale_lines`
+    join for eighty-three seconds and S7's elasticity estimator on its weekly
+    aggregate for sixty-five, and `test_catalog_seed.py` -- eighteen tests, each
+    building a tenant -- went from 37m35s to 6m24s with the line below and
+    nothing else changed. A clean single-file run barely moves, which is the
+    tell: this buys a plan that does not degrade, not a faster scan.
+
+    `ANALYZE` runs inside the transaction, sees the uncommitted rows, and rolls
+    back with everything else if the run fails, so it costs a sample per table
+    and nothing in correctness.
+
+    It runs **between** fixtures rather than once at the end because the stages
+    that read at volume -- forecasting, pricing, mining -- are the later ones,
+    and statistics gathered after they have already run would help nobody but
+    the tests that follow.
+    """
+    if not tables:
+        return
+    with connection.cursor() as cursor:
+        # Quoted from the catalog's own `relname`, so a table named for a
+        # keyword cannot become one.
+        cursor.execute("ANALYZE " + ", ".join(f'"{table}"' for table in tables))
+
+
 def run_profile(context):
     """Run every registered fixture for one profile, in dependency order."""
     check_guard(context)
 
     tables = all_guard_tables()
+    analysable = _analysable()
     for fixture in ordered():
         before = _counts(tables, context.tenant_id)
         fixture.build(context)
+        _analyze(analysable)
         after = _counts(tables, context.tenant_id)
         undeclared = [
             table

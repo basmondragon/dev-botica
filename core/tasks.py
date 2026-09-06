@@ -144,3 +144,4 @@ from core.counter import jobs as counter_jobs  # noqa: E402,F401  -- S4's stale-
 from core.fiscal import jobs as fiscal_jobs  # noqa: E402,F401  -- S5's delivery and sweep
 from core.purchasing import jobs as purchasing_jobs  # noqa: E402,F401  -- S6's five
 from core.pricing import jobs as pricing_jobs  # noqa: E402,F401  -- S7's two
+from core.assistant import jobs as assistant_jobs  # noqa: E402,F401  -- S8's three

@@ -85,7 +85,6 @@ export const CaptureField = forwardRef<
 export function SearchColumn({
   term,
   hits,
-  unresolved,
   referenceCount,
   locationName,
   onAdd,
@@ -94,9 +93,6 @@ export function SearchColumn({
 }: {
   term: string;
   hits: Hit[];
-  /** The code that matched nothing, kept **in the field** so the cashier can
-   *  read it out. Never a toast and never a dialog (§B.10.3). */
-  unresolved: string | null;
   referenceCount: number;
   locationName: string;
   onAdd: (hit: Hit) => void;
@@ -117,30 +113,56 @@ export function SearchColumn({
         ) : null}
       </header>
 
-      <div className="shrink-0 border-b border-hairline px-5 py-4">
-        {field}
-        {unresolved ? (
-          <p className="mt-1.5 text-12 text-critical">
-            Código no encontrado {DOT} {unresolved}
-          </p>
-        ) : null}
-      </div>
+      <div className="shrink-0 border-b border-hairline px-5 py-4">{field}</div>
 
-      {term.trim() === "" ? (
-        <Deliberate
-          referenceCount={referenceCount}
-          locationName={locationName}
-        />
-      ) : hits.length === 0 ? (
-        <Filtered term={term} onClear={onClear} />
-      ) : (
-        <ul className="min-h-0 flex-1 overflow-y-auto">
-          {hits.map((hit) => (
-            <Row key={hit.item.id} hit={hit} onAdd={onAdd} />
-          ))}
-        </ul>
-      )}
+      <SearchResults
+        term={term}
+        hits={hits}
+        referenceCount={referenceCount}
+        locationName={locationName}
+        onAdd={onAdd}
+        onClear={onClear}
+      />
     </section>
+  );
+}
+
+/**
+ * The list itself, and its two empty states.
+ *
+ * **It is a component rather than a block inside the column** because it
+ * renders in two places: the full-height left column before S8 lands and
+ * wherever `enabled` is false, and an L3 overlay anchored under the capture
+ * field once the assistant has taken that column. Neither position knows about
+ * the other; both hand it its own geometry.
+ */
+export function SearchResults({
+  term,
+  hits,
+  referenceCount,
+  locationName,
+  onAdd,
+  onClear,
+}: {
+  term: string;
+  hits: Hit[];
+  referenceCount: number;
+  locationName: string;
+  onAdd: (hit: Hit) => void;
+  onClear: () => void;
+}) {
+  if (term.trim() === "") {
+    return (
+      <Deliberate referenceCount={referenceCount} locationName={locationName} />
+    );
+  }
+  if (hits.length === 0) return <Filtered term={term} onClear={onClear} />;
+  return (
+    <ul className="min-h-0 flex-1 overflow-y-auto">
+      {hits.map((hit) => (
+        <Row key={hit.item.id} hit={hit} onAdd={onAdd} />
+      ))}
+    </ul>
   );
 }
 

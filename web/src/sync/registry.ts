@@ -14,7 +14,7 @@ import type { RxJsonSchema } from "rxdb";
 
 /** Bumped with `REGISTRY_VERSION` on the server. A client behind the server
  *  enters `degraded · versión desactualizada` and reloads the shell. */
-export const REGISTRY_VERSION = 3;
+export const REGISTRY_VERSION = 4;
 
 /**
  * **The stores opened on a till, which is not the same list as the streams.**
@@ -40,6 +40,12 @@ export const COLLECTIONS = [
   // display and its low-stock signal, all at zero latency.
   "lots",
   "stock_on_hand",
+  // **Three streams share this store**, and the name it keeps is the one it had
+  // when S3 opened it. S8's `cross_sell_rules` and `item_warnings` are the same
+  // shape as a threshold: a per-item reference row the till reads and never
+  // writes, scoped to this sede or to the network. Opening a store for each
+  // would need the fourteenth and fifteenth RxDB collections, and the
+  // open-core build stalls 1,8 s on the fourteenth and then refuses it.
   "stock_policies",
   // S4's amendment (ownership.md rule 9). **Six streams, three stores**, and
   // the arithmetic is the reason: RxDB's open-core build refuses the fifteenth
@@ -73,6 +79,13 @@ export const STREAMS = [
   "payments",
   "sale_returns",
   "sale_return_lines",
+  // S8's amendment (ownership.md rule 9, A8). **The safety layer and the mined
+  // rules go down to the till**, which is the whole of what makes the assistant
+  // filter on something rather than looking exactly as if it does. Its two
+  // push-only collections are not streams: a till writes an offer and an
+  // acceptance and never reads either back.
+  "cross_sell_rules",
+  "item_warnings",
 ] as const;
 
 export type StreamName = (typeof STREAMS)[number];
@@ -86,6 +99,10 @@ const SHARED_STORE: Partial<Record<StreamName, CollectionName>> = {
   sale_returns: "sales",
   payments: "sale_lines",
   sale_return_lines: "sale_lines",
+  // A mined rule and a safety warning are both per-item reference rows, which
+  // is the same shape a threshold is.
+  cross_sell_rules: "stock_policies",
+  item_warnings: "stock_policies",
 };
 
 export function storeOf(stream: StreamName): CollectionName {
@@ -100,6 +117,12 @@ const KIND_OF: Partial<Record<StreamName, string>> = {
   sale_lines: "line",
   payments: "payment",
   sale_return_lines: "return_line",
+  // S3's own documents gained a `kind` when S8 moved into this store: a
+  // discriminator the server stamps, never a guess over which fields are
+  // present.
+  stock_policies: "policy",
+  cross_sell_rules: "rule",
+  item_warnings: "warning",
 };
 
 /**
@@ -135,6 +158,11 @@ export function belongsTo(
  */
 export const LOCATION_SCOPED: readonly StreamName[] = [
   "item_prices",
+  // S8's rules are `location_id = $L OR location_id IS NULL`, exactly as the
+  // prices are, so a till moved to another sede holds the wrong sede's rules
+  // as surely as it holds the wrong sede's prices. `item_warnings` is
+  // tenant-wide and is deliberately absent from this list.
+  "cross_sell_rules",
   // All six of S4's: a till moved to another sede holds the wrong sede's
   // tickets exactly as it holds the wrong sede's stock.
   "shifts",
@@ -167,6 +195,12 @@ export const PUSHABLE: readonly string[] = [
   "payments",
   "sale_returns",
   "sale_return_lines",
+  // S8's two, and both are **write-only**: a till records an offer when it
+  // draws a card and an acceptance when the line is added, and reads neither
+  // back. That is what gives the acceptance rate a denominator on a till whose
+  // fibre is cut.
+  "assistant_queries",
+  "assistant_suggestions",
 ];
 
 /**
@@ -181,6 +215,7 @@ export const QUEUE_LABELS: Record<string, string> = {
   shifts: "Turnos",
   sales: "Ventas",
   sale_returns: "Devoluciones",
+  assistant_queries: "Sugerencias",
 };
 
 /**
@@ -196,6 +231,10 @@ const QUEUE_GROUP: Record<string, string> = {
   sale_lines: "sales",
   payments: "sales",
   sale_return_lines: "sale_returns",
+  // A query and the cards it showed are one thing a cashier did, and the
+  // acceptances that follow are the same thing again. `Sugerencias 3` is the
+  // count that answers *how many questions are waiting*.
+  assistant_suggestions: "assistant_queries",
 };
 
 export function queueGroups(
@@ -234,6 +273,8 @@ export const COLLECTION_LABELS: Record<StreamName, string> = {
   payments: "Pagos",
   sale_returns: "Devoluciones",
   sale_return_lines: "Líneas de devolución",
+  cross_sell_rules: "Reglas del asistente",
+  item_warnings: "Advertencias de producto",
 };
 
 /** Every document carries these two, and the cursor and the digest are both
@@ -424,9 +465,18 @@ export interface SaleLineDoc {
   reference: string | null;
 }
 
+/**
+ * A threshold, a mined rule or a safety warning — **one store, split by
+ * `kind`**.
+ *
+ * `item_id` is the row's own item for a threshold and a warning, and the
+ * **anchor** (`item_a`) for a rule, which is what lets one index serve the
+ * ranker's per-anchor lookup and the filter's per-candidate lookup at once.
+ */
 export interface PolicyDoc {
   id: string;
   updated_at: string;
+  kind: "policy" | "rule" | "warning";
   item_id: string;
   location_id: string | null;
   min_quantity: number | null;
@@ -434,6 +484,38 @@ export interface PolicyDoc {
   reorder_point: number | null;
   target_coverage_days: number | null;
   source: string;
+  /** `rule` only: the item the anchor is bought together with. */
+  item_b_id?: string | null;
+  support?: number | null;
+  /** P(B present | A present), as a decimal string. Rendered as `% del ancla`
+   *  and never under a `Confianza` label — the two are different quantities. */
+  confidence?: string | null;
+  lift?: string | null;
+  rank?: number | null;
+  /** The band the rule carried, which is what selects which form of the
+   *  `Se lleva junto` reason line renders. */
+  confidence_band?: "low" | "medium" | "high" | null;
+  /** When the run that wrote this rule computed it. **The only staleness figure
+   *  this stage puts on a till**, and it is stated once in the sync panel
+   *  rather than on every card. */
+  computed_at?: string | null;
+  /** `warning` only. */
+  type?: "interaction" | "contraindication" | "do_not_suggest_if" | null;
+  text?: string | null;
+  severity?: "blocking" | "advisory" | null;
+  triggers?: TriggerClause[] | null;
+}
+
+/** One clause of a warning's trigger, over the closed English vocabulary the
+ *  bundle carries. The clauses of one trigger are ORed. */
+export interface TriggerClause {
+  symptom?: string;
+  population?: string;
+  interacts_with_ingredient?: string;
+  duration_days?: { operator: string; value: number };
+  operator?: string;
+  value?: number;
+  unit?: string;
 }
 
 /**
@@ -651,8 +733,13 @@ export const SCHEMAS = {
     // a devolución's lines are each `(kind, parent_id)`.
     [["kind", "parent_id"]],
   ),
+  // **One store, three streams** (see `COLLECTIONS`). The index is
+  // `(kind, item_id)` because all three lookups are keyed that way: the
+  // counter's threshold read, the ranker's per-anchor rule read and the
+  // filter's per-candidate warning read.
   stock_policies: schema<PolicyDoc>(
     {
+      kind: { type: "string", maxLength: 8 },
       item_id: { type: "string", maxLength: 36 },
       location_id: { type: ["string", "null"], maxLength: 36 },
       min_quantity: { type: ["number", "null"] },
@@ -660,9 +747,20 @@ export const SCHEMAS = {
       reorder_point: { type: ["number", "null"] },
       target_coverage_days: { type: ["number", "null"] },
       source: { type: "string", maxLength: 16 },
+      item_b_id: { type: ["string", "null"], maxLength: 36 },
+      support: { type: ["number", "null"] },
+      confidence: { type: ["string", "null"] },
+      lift: { type: ["string", "null"] },
+      rank: { type: ["number", "null"] },
+      confidence_band: { type: ["string", "null"], maxLength: 8 },
+      computed_at: { type: ["string", "null"], maxLength: 32 },
+      type: { type: ["string", "null"], maxLength: 24 },
+      text: { type: ["string", "null"] },
+      severity: { type: ["string", "null"], maxLength: 16 },
+      triggers: { type: ["array", "null"], items: { type: "object" } },
     },
-    ["item_id"],
-    [["item_id"]],
+    ["kind", "item_id"],
+    [["kind", "item_id"]],
   ),
 } satisfies Record<CollectionName, RxJsonSchema<never>>;
 

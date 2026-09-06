@@ -3,10 +3,11 @@ import type { Me } from "@/api/queries";
 import { Button } from "@/ui/button";
 import { cn } from "@/ui/cn";
 import { useFocusTrap, useScrimDismiss } from "@/ui/panel";
-import { EmptyState } from "@/ui/states";
+import { EmptyState, RegionError } from "@/ui/states";
 import { GeneralSection } from "./general";
 import { PeopleSection } from "./people";
 import { ActivitySection } from "./activity";
+import { AssistantSection } from "./assistant";
 import { CustomersSection } from "./catalog-customers";
 import { DevicesSection } from "./devices";
 import { InvoicingSection } from "./invoicing";
@@ -29,10 +30,7 @@ import {
  */
 export function SettingsDialog({ me }: { me: Me }) {
   const settings = useSettingsDialog();
-  // §B.8.3 · a `cashier` does not reach this dialog. Not by the gear, which is
-  // absent from their footer; not by ⌘,; and not by a pasted `?settings=`
-  // param, which is what this gate is for.
-  if (!settings.open || reachableSections(me.role).length === 0) return null;
+  if (!settings.open) return null;
   return <Dialog me={me} id={settings.id!} />;
 }
 
@@ -42,6 +40,12 @@ function Dialog({ me, id }: { me: Me; id: string }) {
   const scrim = useScrimDismiss(settings.close);
   const reachable = reachableSections(me.role);
   const current = sectionById(id);
+  // §B.8.3 · **a role that reaches no section gets a denial naming the role
+  // required, in the content region.** The gear is absent from a cashier's
+  // footer and ⌘, does nothing for them, so the only way here is a pasted
+  // `?settings=` URL — and the answer to that is a refusal somebody can read,
+  // never a redirect and never a blank pane.
+  const denied = reachable.length === 0;
 
   return (
     <div
@@ -123,7 +127,12 @@ function Dialog({ me, id }: { me: Me; id: string }) {
             </Button>
           </div>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-6 pt-1">
-            {current?.id === "general" ? (
+            {denied ? (
+              <RegionError
+                title={`Esta sección requiere el perfil ${name_the_roles(current?.roles ?? OFFICE_ROLES)}.`}
+                detail="Su perfil atiende el mostrador. Pida a la administradora de su droguería que la abra por usted."
+              />
+            ) : current?.id === "general" ? (
               <GeneralSection me={me} />
             ) : current?.id === "people" ? (
               <PeopleSection me={me} />
@@ -141,6 +150,8 @@ function Dialog({ me, id }: { me: Me; id: string }) {
               <PurchasingSection />
             ) : current?.id === "pricing" ? (
               <PricingSection />
+            ) : current?.id === "assistant" ? (
+              <AssistantSection />
             ) : current?.id === "activity" ? (
               <ActivitySection />
             ) : (
@@ -155,4 +166,23 @@ function Dialog({ me, id }: { me: Me; id: string }) {
       </div>
     </div>
   );
+}
+
+/** The Spanish phrase a refusal names, matching the server's own wording so a
+ *  denial reads the same whichever side produced it. */
+const LABELS: Record<string, string> = {
+  owner: "Propietaria",
+  admin: "Administradora",
+  platform_admin: "Plataforma",
+  cashier: "Mostrador",
+};
+
+const OFFICE_ROLES = ["owner", "admin", "platform_admin"] as const;
+
+function name_the_roles(roles: readonly string[]): string {
+  const named = roles
+    .filter((role) => role !== "platform_admin")
+    .map((role) => LABELS[role] ?? role);
+  if (named.length <= 1) return named[0] ?? "";
+  return `${named.slice(0, -1).join(", ")} o ${named[named.length - 1]}`;
 }

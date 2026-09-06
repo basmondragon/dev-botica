@@ -39,12 +39,18 @@ def test_me_answers_the_identity_the_shell_gates_its_nav_on(client_as, owner_a, 
 def test_nav_counters_report_zero_and_zero_renders_nothing(client_as, owner_a):
     """Zero renders nothing at all -- not a 0, not a dot, not a dimmed badge.
 
-    S4 filled `counter` with ventas abiertas, so the map is no longer empty; a
-    tenant that has never sold reports zero, and the shell is what declines to
-    draw it.
+    S4 filled `counter` with ventas abiertas and S6 added `purchasing`, so the
+    map is no longer empty; a tenant that has never sold reports zero on both,
+    and the shell is what declines to draw them.
+
+    **The assertion is the whole map and not a subset**, which is what makes a
+    stage adding a key here a change somebody has to come and make on purpose.
     """
     response = client_as(owner_a).get("/api/nav-counters")
-    assert response.json() == {"counters": {"counter": 0}, "critical": []}
+    assert response.json() == {
+        "counters": {"counter": 0, "purchasing": 0},
+        "critical": [],
+    }
 
 
 @pytest.mark.django_db

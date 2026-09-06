@@ -6,6 +6,7 @@ import {
   MonitorSmartphone,
   ScrollText,
   ShoppingCart,
+  Sparkles,
   Tag,
   Truck,
   UserRound,
@@ -117,6 +118,17 @@ export const SETTINGS: SettingsSection[] = [
     label: "Precios y topes",
     group: "Operación",
     icon: Tag,
+    roles: OFFICE,
+  },
+  {
+    // §B.8.4·4 · **Operación**, and S8's is the group's fourth section. It is
+    // reached at `/mostrador?settings=assistant`, so a cashier who is refused
+    // it gets a denial in the content region naming the role required rather
+    // than a redirect or a blank pane (§B.8.3).
+    id: "assistant",
+    label: "Asistente",
+    group: "Operación",
+    icon: Sparkles,
     roles: OFFICE,
   },
   {

@@ -152,29 +152,52 @@ def build(context):
     """Set the goal, load the caps, run the engine, then act like a person."""
     shape = PROFILES[context.profile]
     tenant = Tenant.objects.get(id=context.tenant_id)
-    pricing_settings.write(tenant, dict(SETTINGS))
     context.note(f"  precios         meta de margen {SETTINGS['margin_goal_pct']}%")
 
-    actor = _regente(context)
-    if shape["caps"]:
-        loaded = _load_caps(context, actor)
-        context.wrote("items", 0)
-        context.note(f"  precios         {loaded} topes regulados cargados")
+    # **A rerun does the work once and reports it twice.**
+    #
+    # Every row below carries an id the ORM minted rather than one derived from
+    # a natural key -- the estimates and proposals `engine.run` writes, and the
+    # `manual` rows S1's editor writes underneath `_resolve` and `_make_stale`
+    # -- and `set_cap` restamps `items.updated_at` on every reference it
+    # touches. So a second pass would not land on the rows the first one wrote.
+    # It would put a second set of repricings beside them and move four thousand
+    # item stamps, and S0's promise that a rerun over the seed's own rows changes
+    # nothing would be false for this stage alone.
+    #
+    # Deriving the ids instead would mean a creation path existing only for the
+    # seed, which is the thing `owned_ids` below states this fixture will not
+    # build. Not running twice is the same answer given once more.
+    #
+    # `cap_status` is the marker: S1 leaves it empty on every reference it
+    # writes, and `_load_caps` is the only thing that fills it -- on every
+    # profile, since all five load caps.
+    already = (
+        Item.objects.filter(tenant_id=context.tenant_id).exclude(cap_status="").exists()
+    )
 
-    engine.run(context.tenant_id)
+    if not already:
+        pricing_settings.write(tenant, dict(SETTINGS))
+        actor = _regente(context)
+        if shape["caps"]:
+            loaded = _load_caps(context, actor)
+            context.wrote("items", 0)
+            context.note(f"  precios         {loaded} topes regulados cargados")
 
-    if shape["resolve"]:
-        _resolve(context, actor)
-        # **The second run is the following Monday's**, and it is what puts the
-        # resolved references into `cooldown`, supersedes what nobody looked at,
-        # and leaves the screen in the state a tenant is actually in on the
-        # second week -- resolved rows beside live ones.
         engine.run(context.tenant_id)
-        if shape["stale"]:
-            # **After** the run, and only after: a suggestion is stale because
-            # somebody moved the price the run computed against, so an edit made
-            # before it would simply be the price the run read.
-            _make_stale(context, actor)
+
+        if shape["resolve"]:
+            _resolve(context, actor)
+            # **The second run is the following Monday's**, and it is what puts
+            # the resolved references into `cooldown`, supersedes what nobody
+            # looked at, and leaves the screen in the state a tenant is actually
+            # in on the second week -- resolved rows beside live ones.
+            engine.run(context.tenant_id)
+            if shape["stale"]:
+                # **After** the run, and only after: a suggestion is stale
+                # because somebody moved the price the run computed against, so
+                # an edit made before it would simply be the price the run read.
+                _make_stale(context, actor)
 
     context.wrote(
         "elasticity_estimates",

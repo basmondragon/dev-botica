@@ -20,6 +20,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models.functions import Lower, Upper
 from django.utils import timezone
@@ -3719,3 +3720,469 @@ class PriceProposal(TenantScopedModel):
 
     def __str__(self):
         return f"{self.item_id} · {self.basis} · {self.suggested_price}"
+
+
+# ---------------------------------------------------------------------------
+# S8 · the assistant
+#
+# Four tables and seven enums. **The safety layer is a filter and never an
+# annotation** (§7, A8): `item_warnings.triggers` is what the pipeline
+# evaluates, `item_warnings.text` is what a cashier reads, and the two are
+# separate columns because a filter that parses Spanish prose fails silently the
+# first time somebody writes *"no dar si hay sangre"* instead of *"si hay
+# sangre"*.
+#
+# **`assistant_suggestions` is written when a card is *shown*, not when it is
+# taken** (ledger), which is the whole of why the Panel's acceptance rate has a
+# denominator at all.
+# ---------------------------------------------------------------------------
+
+
+class SuggestionType(models.TextChoices):
+    """The three cards, and every one of them is **derived, never chosen by a
+    model** (S8, *Rank, and label*)."""
+
+    FIRST_CHOICE = "first_choice", "Primera opción"
+    CONDITIONAL = "conditional", "Con condición"
+    BOUGHT_TOGETHER = "bought_together", "Se lleva junto"
+
+
+class AssistantMode(models.TextChoices):
+    """Coined. §3 gives `assistant_queries.mode` these two values and no name.
+
+    `local` is not a failure state. It is what the till does offline, with the
+    gateway down, past the spend cap, with `model_enabled` off, and when the
+    output check rejected -- five different causes and one behaviour, because
+    §B.10.3 is binding that no error at a counter obstructs a sale.
+    """
+
+    MODEL = "model", "Con modelo"
+    LOCAL = "local", "Modo local"
+
+
+class ItemWarningType(models.TextChoices):
+    """Coined name, values from §3."""
+
+    INTERACTION = "interaction", "Interacción"
+    CONTRAINDICATION = "contraindication", "Contraindicación"
+    DO_NOT_SUGGEST_IF = "do_not_suggest_if", "No ofrecer si"
+
+
+class WarningSeverity(models.TextChoices):
+    """Coined. §3 gives `item_warnings.severity` no domain.
+
+    **Two values and no numeric scale.** `blocking` is what the filter reads;
+    `advisory` is what a card carries as its reason. A severity a build agent
+    has to interpret is a filter nobody can predict.
+    """
+
+    BLOCKING = "blocking", "Bloqueante"
+    ADVISORY = "advisory", "Informativa"
+
+
+class ItemWarningSource(models.TextChoices):
+    """Coined. The ledger says warnings are loaded with the catalog and edited
+    by `owner`/`admin`; this column is which of the two."""
+
+    CATALOG = "catalog", "Cargada con el catálogo"
+    MANUAL = "manual", "Escrita en Ajustes"
+
+
+class CrossSellBasis(models.TextChoices):
+    """Coined. Which sale population a mining run consumed (§1).
+
+    Without it a rule mined from three weeks of Botica's own trading is
+    indistinguishable from one mined from eighteen months of imported history.
+    """
+
+    COUNTER = "counter", "Venta propia"
+    IMPORTED = "imported", "Historial importado"
+    MIXED = "mixed", "Ambas"
+
+
+class CrossSellConfidence(models.TextChoices):
+    """Coined. How much the miner knew when it wrote the rule, banded.
+
+    **This is not `cross_sell_rules.confidence`**, which is P(B present | A
+    present) and an association statistic. The two sit on the same row and mean
+    different things, which is exactly why they are not the same word: §1 asks
+    every model surface to show a confidence, and a screen that rendered P(B|A)
+    under a `Confianza del modelo` label has rendered the wrong number.
+    """
+
+    LOW = "low", "Baja"
+    MEDIUM = "medium", "Media"
+    HIGH = "high", "Alta"
+
+
+#: The deterministic English cause behind every Spanish reason line, written by
+#: the pipeline and **never by the model** (S8, *`reason_code`*). A constrained
+#: text column rather than a Postgres type -- the choice `stock_moves.reason`
+#: and `purchase_order_lines.reason_code` already made, and for the same reason:
+#: a later stage adds a code without a type migration.
+SUGGESTION_REASON_CODES = (
+    "symptom_primary",
+    "symptom_secondary",
+    "warning_conditional",
+    "bought_together_location",
+    "bought_together_network",
+    "ticket_companion",
+    "substitute_available",
+    "no_candidates",
+)
+
+
+class ItemWarning(TenantScopedModel):
+    """The safety layer, as a row the filter can evaluate.
+
+    `text` is the Spanish string a cashier reads, **verbatim and never
+    paraphrased** -- a `conditional` card's reason *is* this column, and a
+    safety string a model rewrites has stopped being a safety string.
+
+    `triggers` is a JSONB array of clauses, ORed, each one an object over a
+    **closed English vocabulary** validated by `core.assistant.vocabulary`. The
+    closure is the load-bearing decision of this stage: a warning naming a key
+    the extractor cannot emit never fires, and nothing anywhere raises.
+    """
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="warnings")
+    type = EnumField(
+        max_length=24, choices=ItemWarningType, db_enum="item_warning_type"
+    )
+    text = models.TextField()
+    severity = EnumField(
+        max_length=16, choices=WarningSeverity, db_enum="warning_severity"
+    )
+    source = EnumField(
+        max_length=16,
+        choices=ItemWarningSource,
+        db_enum="item_warning_source",
+        default=ItemWarningSource.MANUAL,
+    )
+    #: **Coined.** The structured condition the filter evaluates.
+    triggers = models.JSONField(default=list, blank=True)
+    #: **Coined.** A registry collection is never hard-deleted while the
+    #: registry lists it, or the row lives on every till forever (S2, criterion
+    #: 14) -- so `DELETE /api/item-warnings/{id}` writes this instead.
+    active = models.BooleanField(default=True)
+    created_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        db_table = "item_warnings"
+        ordering = ["item__name", "type"]
+        indexes = [
+            # The filter chain's per-candidate lookup, run once per candidate
+            # per query. Partial on `active`, because an inactive warning is
+            # never read by anything on the hot path.
+            models.Index(
+                fields=["tenant", "item"],
+                condition=models.Q(active=True),
+                name="item_warnings_active_by_item",
+            ),
+            # S2's delta cursor shape for a tenant-wide collection (rule 4).
+            models.Index(
+                fields=["tenant", "updated_at", "id"], name="item_warnings_delta_cursor"
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(triggers__isnull=False),
+                name="a_warning_carries_a_trigger_array",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} · {self.type} · {self.severity}"
+
+
+class CrossSellRule(TenantScopedModel):
+    """One directed pair, mined from this tenant's own closed tickets.
+
+    **Directed.** A→B and B→A are two rows with different confidences, because
+    the anchor is what the customer is being sold and the suggestion is what
+    goes with it -- averaging the two directions loses exactly the asymmetry the
+    assistant uses.
+
+    `location_id` is **coined** and nullable: null is network-wide, a value is
+    that sede. It follows `item_prices` and `elasticity_estimates`, which both
+    scope this way in §3, and it is what makes *"en este punto el 64%"* a true
+    sentence rather than a network claim rendered with the word *punto* in front
+    of it.
+    """
+
+    location = models.ForeignKey(
+        Location, null=True, blank=True, on_delete=models.CASCADE, related_name="+"
+    )
+    item_a = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="+")
+    item_b = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="+")
+    #: Tickets carrying both items, inside the window.
+    support = models.PositiveIntegerField()
+    #: P(B present | A present), as a share between 0 and 1.
+    confidence = models.DecimalField(max_digits=6, decimal_places=4)
+    #: **Coined.** `confidence` over the share of all tickets carrying B.
+    #: Ranking on this is what stops every suggestion card in the product being
+    #: the same three fast movers.
+    lift = models.DecimalField(max_digits=10, decimal_places=4)
+    #: The window the run consumed, as `90d` -- the same short form
+    #: `elasticity_estimates.window` uses.
+    window = models.CharField(max_length=8)
+    computed_at = models.DateTimeField(default=timezone.now)
+    #: **Coined.** 1-based, by `lift` descending, inside one `(scope, item_a)`.
+    #: The cap is enforced by the job that writes the rows, never by the
+    #: predicate that reads them.
+    rank = models.PositiveSmallIntegerField()
+    algorithm_version = models.CharField(max_length=64)
+    #: The three provenance columns §1 requires, carried on every row rather
+    #: than in a run-scope table the till would have to join against. That
+    #: denormalisation is rule 9's own trade: a fifth registry collection costs
+    #: a till more than 0,10 MB does.
+    basis = EnumField(max_length=16, choices=CrossSellBasis, db_enum="cross_sell_basis")
+    #: The scope's minable-ticket denominator for the window. `support` of 40
+    #: over 220 tickets and `support` of 40 over 12.000 are not the same finding.
+    ticket_count = models.PositiveIntegerField()
+    #: Derived at write time from `support` and `ticket_count`, **never
+    #: entered**. It is the one of the three the device actually reads, because
+    #: it selects which form of the `bought_together_location` reason renders.
+    confidence_band = EnumField(
+        max_length=8, choices=CrossSellConfidence, db_enum="cross_sell_confidence"
+    )
+
+    class Meta:
+        db_table = "cross_sell_rules"
+        ordering = ["-lift"]
+        indexes = [
+            # The ranker's per-anchor lookup and the registry predicate.
+            models.Index(
+                fields=["tenant", "location", "item_a", "-lift"],
+                name="cross_sell_by_anchor",
+            ),
+            # S2's delta cursor shape for a location-scoped collection.
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="cross_sell_delta_cursor",
+            ),
+        ]
+        constraints = [
+            # Postgres 18 (§9) treats the null network scope as a value, so one
+            # run cannot write two rules for the same ordered pair at the same
+            # grain. A partial-index pair would otherwise have to fake it.
+            models.UniqueConstraint(
+                fields=["tenant", "location", "item_a", "item_b"],
+                name="one_rule_per_ordered_pair_per_scope",
+                nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(item_a=models.F("item_b")),
+                name="an_item_is_never_paired_with_itself",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_a_id} → {self.item_b_id} ({self.lift})"
+
+
+class AssistantQuery(ClientWrittenModel):
+    """One question asked at a counter.
+
+    It carries the client-write quartet because **the till writes it** -- the
+    whole claim of this stage is a counter whose fibre is cut, and a row that
+    only existed where the network did would make the acceptance rate a measure
+    of connectivity.
+
+    **What survives `assistant.transcript_purge` is the row's shape** --
+    `location_id`, `sale_id`, `mode`, `model`, `cost_usd`, `latency_ms`, its
+    timestamps and its suggestions with `accepted` -- which is exactly what
+    every metric in the product needs and none of what Ley 1581 is about.
+    """
+
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    #: The ticket the question was asked against, where one was open.
+    sale = models.ForeignKey(
+        Sale, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: **Coined.** §3 lists no actor, and per-cashier acceptance is unanswerable
+    #: without one.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    #: **Coined, and stamped at write time.** §2 makes "delete" a hard delete of
+    #: a `users` row, and every stage referencing it does so `ON DELETE SET
+    #: NULL` and keeps the human-readable identity it needs -- `sale.sold_by_name`
+    #: is S4's instance and `audit_log.actor_email` is S0's. Without it the
+    #: `Cajero` column of `Registro del asistente` empties retroactively for
+    #: every query a cashier who has since left ever asked.
+    user_name = models.CharField(max_length=200, blank=True)
+    #: Health data (§11.3). Nulled by `assistant.transcript_purge` after
+    #: `transcript_retention_days`, and immediately where `retain_transcripts`
+    #: is false -- in which case the till never pushed it at all.
+    transcript = models.TextField(blank=True)
+    #: `[{"key": "diarrhea", "label": "diarrea", "kind": "symptom", "source":
+    #: "lexicon"}]` -- the English `key` is what the filter matches on, the
+    #: Spanish `label` is the chip a cashier reads, and neither is derived from
+    #: the other at runtime.
+    symptoms = models.JSONField(default=list, blank=True)
+    recommendation = models.TextField(blank=True)
+    #: **Coined.** The card's second register is a separate string, not a
+    #: paragraph split on a full stop.
+    recommendation_secondary = models.TextField(blank=True)
+    mode = EnumField(max_length=8, choices=AssistantMode, db_enum="assistant_mode")
+    model = models.CharField(max_length=120, blank=True)
+    cost_usd = models.DecimalField(max_digits=10, decimal_places=6, default=0)
+    latency_ms = models.PositiveIntegerField(null=True, blank=True)
+    #: **Coined.** What the safety filter removed and which rule removed it --
+    #: `[{"item_id": ..., "warning_id": ..., "reason": "warning_blocking"}]`.
+    #: Criterion 5 is read off this column.
+    excluded = models.JSONField(default=list, blank=True)
+    #: **Coined.** False means nothing model-written reached the screen.
+    output_check_passed = models.BooleanField(default=True)
+    output_check_flags = ArrayField(models.TextField(), default=list, blank=True)
+    #: **Coined.** The `3 de 12 referencias` denominator: what survived the
+    #: filter, not what was shown.
+    candidate_count = models.PositiveIntegerField(default=0)
+    #: **Coined.** Stamped when the cashier re-asks on the same open sale. Its
+    #: un-accepted suggestions leave the denominator.
+    superseded_at = models.DateTimeField(null=True, blank=True)
+    #: **Coined.** Which shipped lexicon and which rule set were in force, so a
+    #: till extracting against last quarter's vocabulary is visible rather than
+    #: invisible.
+    bundle_version = models.CharField(max_length=64, blank=True)
+    ruleset_computed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "assistant_queries"
+        ordering = ["-recorded_at"]
+        indexes = [
+            # Rule 4 · the month-to-date spend sum the cap is enforced against,
+            # and the query log's own period filter.
+            models.Index(
+                fields=["tenant", "recorded_at"], name="assistant_queries_by_period"
+            ),
+            # Rule 4 · the ticket-comparison join and the per-sale lookup.
+            models.Index(
+                fields=["tenant", "location", "sale"],
+                condition=models.Q(sale__isnull=False),
+                name="assistant_queries_by_sale",
+            ),
+            # S2's delta cursor shape. Push-only, but the shape is the
+            # registry's convention and the query log reads it the same way.
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="assistant_queries_cursor",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"],
+                name="one_assistant_query_per_client_uuid",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.location_id} · {self.mode}"
+
+
+class AssistantSuggestion(ClientWrittenModel):
+    """One card **shown**, and what became of it.
+
+    Written at offer time, which is what gives the acceptance rate a
+    denominator. `available_quantity` and `rule_confidence` are **frozen at
+    offer time** for the same reason: a stock level re-read at report time is a
+    different number, and a period's acceptance rate measured against rules that
+    were thin at the time is a different rate from the same period measured
+    against today's bands.
+    """
+
+    query = models.ForeignKey(
+        AssistantQuery, on_delete=models.CASCADE, related_name="suggestions"
+    )
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name="+")
+    item = models.ForeignKey(Item, on_delete=models.PROTECT, related_name="+")
+    type = EnumField(max_length=20, choices=SuggestionType, db_enum="suggestion_type")
+    #: The sentence a cashier repeats out loud. On a `conditional` card it **is**
+    #: the warning's own `text`, verbatim.
+    reason = models.TextField(blank=True)
+    #: **Coined.** The deterministic English cause the Spanish reason is written
+    #: from -- what makes a reason line non-empty offline, and what lets S9 group
+    #: reasons without parsing Spanish prose.
+    reason_code = models.CharField(max_length=32, blank=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    #: **Coined.** 1-based, the drawn order.
+    rank = models.PositiveSmallIntegerField(default=1)
+    #: **Coined.** The `14 unidades en Chapinero` figure at offer time, frozen.
+    available_quantity = models.IntegerField(default=0)
+    #: **Coined.** The `item_warnings` row that made this a `conditional`.
+    warning = models.ForeignKey(
+        ItemWarning, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    #: **Coined, nullable.** The band the rule carried **at offer time**; null on
+    #: a card no rule produced.
+    rule_confidence = EnumField(
+        max_length=8,
+        choices=CrossSellConfidence,
+        db_enum="cross_sell_confidence",
+        null=True,
+        blank=True,
+    )
+    accepted = models.BooleanField(default=False)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    sale_line = models.ForeignKey(
+        SaleLine, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        db_table = "assistant_suggestions"
+        ordering = ["rank"]
+        indexes = [
+            # The card render and the accept path.
+            models.Index(
+                fields=["tenant", "query", "rank"], name="assistant_cards_of_query"
+            ),
+            # The acceptance rate and the combination list over a period.
+            models.Index(
+                fields=["tenant", "recorded_at", "type"],
+                name="assistant_offers_by_period",
+            ),
+            models.Index(
+                fields=["tenant", "location", "updated_at", "id"],
+                name="assistant_suggestions_cur",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "client_uuid"],
+                name="one_suggestion_per_client_uuid",
+            ),
+            # **One line is credited to at most one suggestion**, which is the
+            # whole of what keeps the numerator honest (A5, *Hands off*).
+            models.UniqueConstraint(
+                fields=["tenant", "sale_line"],
+                condition=models.Q(sale_line__isnull=False),
+                name="one_suggestion_per_sale_line",
+            ),
+            # An acceptance is an act and it is dated. A flag with no date, or a
+            # date with no flag, is half a record -- the same rule
+            # `price_proposals.resolved_at` follows.
+            models.CheckConstraint(
+                condition=models.Q(accepted=True, accepted_at__isnull=False)
+                | models.Q(accepted=False, accepted_at__isnull=True),
+                name="an_accepted_suggestion_is_dated",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reason_code="")
+                | models.Q(reason_code__in=SUGGESTION_REASON_CODES),
+                name="a_suggestion_reason_code_is_declared",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.item_id} · {self.type}"
